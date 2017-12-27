@@ -139,9 +139,9 @@ open class Query(val transaction: Transaction, set: FieldSet, where: Op<Boolean>
         append(" FROM ")
         append(set.source.describe(transaction))
 
-        where?.let {
+        where?.toSQL(builder)?.takeIf { !it.toBoolean() }?.let {
             append(" WHERE ")
-            append(it.toSQL(builder))
+            append(it)
         }
 
         if (!count) {

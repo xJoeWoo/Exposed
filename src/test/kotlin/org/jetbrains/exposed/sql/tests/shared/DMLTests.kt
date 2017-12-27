@@ -6,8 +6,7 @@ import org.jetbrains.exposed.dao.IntIdTable
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.statements.BatchDataInconsistentException
 import org.jetbrains.exposed.sql.statements.BatchInsertStatement
-import org.jetbrains.exposed.sql.tests.DatabaseTestsBase
-import org.jetbrains.exposed.sql.tests.TestDB
+import org.jetbrains.exposed.sql.tests.*
 import org.joda.time.DateTime
 import org.junit.Assert.assertThat
 import org.junit.Test
@@ -42,11 +41,11 @@ object DMLTestsData {
         val n = integer("n")
         val nn = integer("nn").nullable()
 
-        val d = date("d")
-        val dn = date("dn").nullable()
+        val d = date<DateTime>("d")
+        val dn = date<DateTime>("dn").nullable()
 
-        val t = datetime("t")
-        val tn = datetime("tn").nullable()
+        val t = datetime<DateTime>("t")
+        val tn = datetime<DateTime>("tn").nullable()
 
         val e = enumeration("e", E::class.java)
         val en = enumeration("en", E::class.java).nullable()
@@ -1106,7 +1105,7 @@ class DMLTests : DatabaseTestsBase() {
 
         val foo = object : IntIdTable("foo") {
             val name = text("name")
-            val defaultDateTime = datetime("defaultDateTime").defaultExpression(CurrentDateTime())
+            val defaultDateTime = datetime<DateTime>("defaultDateTime").defaultExpression(dateProvider<DateTime>().CurrentDateTime())
             val defaultInt = integer("defaultInteger").defaultExpression(abs(-100))
         }
 

@@ -6,12 +6,17 @@ import com.mysql.management.driverlaunched.ServerLauncherSocketFactory
 import com.mysql.management.util.Files
 import com.opentable.db.postgres.embedded.EmbeddedPostgres
 import org.h2.engine.Mode
+import org.jetbrains.exposed.extensions.dataTypes.joda.JodaDateSPI
+import org.jetbrains.exposed.extensions.dataTypes.joda.date as jodaDate
+import org.jetbrains.exposed.extensions.dataTypes.joda.datetime as jodaDateTime
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.vendors.currentDialect
+import org.joda.time.DateTime
 import org.joda.time.DateTimeZone
 import java.util.*
 import kotlin.concurrent.thread
+
 
 enum class TestDB(val connection: String, val driver: String, val user: String = "root", val pass: String = "",
                   val beforeConnection: () -> Unit = {}, val afterTestFinished: () -> Unit = {}) {
@@ -131,3 +136,18 @@ abstract class DatabaseTestsBase {
     fun <T>Transaction.assertEquals(exp: T, act: T) = kotlin.test.assertEquals(exp, act, "Failed on ${currentDialect.name}")
     fun <T>Transaction.assertEquals(exp: T, act: List<T>) = kotlin.test.assertEquals(exp, act.single(), "Failed on ${currentDialect.name}")
 }
+
+inline fun <reified DATE> Table.date(name: String) = when {
+    DATE::class == DateTime::class -> jodaDate(name)
+    else -> error("")
+}
+
+inline fun <reified DATE> Table.datetime(name: String) = when {
+    DATE::class == DateTime::class -> jodaDateTime(name)
+    else -> error("")
+}
+
+inline fun <reified DATE:Any> dateProvider() = when {
+    DATE::class == DateTime::class -> JodaDateSPI
+    else -> error("")
+} as DateApi<DATE>

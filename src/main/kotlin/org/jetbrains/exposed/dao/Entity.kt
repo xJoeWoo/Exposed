@@ -528,7 +528,7 @@ abstract class EntityClass<ID : Any, out T: Entity<ID>>(val table: IdTable<ID>, 
         return entity
     }
 
-    open fun all(): SizedIterable<T> = wrapRows(table.selectAll().notForUpdate())
+    open fun all(): SizedIterable<T> = wrapRows(searchQuery(Op.TRUE).notForUpdate())
 
     fun find(op: Op<Boolean>): SizedIterable<T> {
         warmCache()

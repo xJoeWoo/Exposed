@@ -1,9 +1,14 @@
 package org.jetbrains.exposed.sql
 
 import org.jetbrains.exposed.dao.EntityID
-import org.joda.time.DateTime
 
 abstract class Op<out T> : Expression<T>() {
+    object TRUE : Op<Boolean>() {
+        override fun toSQL(queryBuilder: QueryBuilder): String = "TRUE"
+    }
+    object FALSE : Op<Boolean>() {
+        override fun toSQL(queryBuilder: QueryBuilder): String = "FALSE"
+    }
     companion object {
         inline fun <T> build(op: SqlExpressionBuilder.()-> Op<T>): Op<T> = SqlExpressionBuilder.op()
     }
@@ -75,15 +80,12 @@ fun booleanParam(value: Boolean): Expression<Boolean> = QueryParameter(value, Bo
 fun intParam(value: Int): Expression<Int> = QueryParameter(value, IntegerColumnType())
 fun longParam(value: Long): Expression<Long> = QueryParameter(value, LongColumnType())
 fun stringParam(value: String): Expression<String> = QueryParameter(value, VarCharColumnType())
-fun dateParam(value: DateTime): Expression<DateTime> = QueryParameter(value, DateColumnType(false))
-fun dateTimeParam(value: DateTime): Expression<DateTime> = QueryParameter(value, DateColumnType(true))
+
 
 fun booleanLiteral(value: Boolean) : LiteralOp<Boolean> = LiteralOp (BooleanColumnType(), value)
 fun intLiteral(value: Int) : LiteralOp<Int> = LiteralOp (IntegerColumnType(), value)
 fun longLiteral(value: Long) : LiteralOp<Long> = LiteralOp(LongColumnType(), value)
 fun stringLiteral(value: String) : LiteralOp<String> = LiteralOp(VarCharColumnType(), value)
-fun dateLiteral(value: DateTime) : LiteralOp<DateTime> = LiteralOp(DateColumnType(false), value)
-fun dateTimeLiteral(value: DateTime) : LiteralOp<DateTime> = LiteralOp(DateColumnType(true), value)
 
 abstract class ComparisonOp(val expr1: Expression<*>, val expr2: Expression<*>, val opSign: String): Op<Boolean>() {
     override fun toSQL(queryBuilder: QueryBuilder) = buildString {

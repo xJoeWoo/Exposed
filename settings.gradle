@@ -1,3 +1,5 @@
 rootProject.name='exposed'
 include 'spring-transaction'
+include 'extensions:data-types:joda-time'
+findProject(':extensions:data-types:joda-time')?.name = 'exposed-jodatime'
 

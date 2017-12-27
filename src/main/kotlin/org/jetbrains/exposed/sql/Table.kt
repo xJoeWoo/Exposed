@@ -7,7 +7,6 @@ import org.jetbrains.exposed.sql.vendors.OracleDialect
 import org.jetbrains.exposed.sql.vendors.currentDialect
 import org.jetbrains.exposed.sql.vendors.currentDialectIfAvailable
 import org.jetbrains.exposed.sql.vendors.inProperCase
-import org.joda.time.DateTime
 import java.math.BigDecimal
 import java.sql.Blob
 import java.util.*
@@ -220,11 +219,7 @@ open class Table(name: String = ""): ColumnSet(), DdlAware {
 
     fun long(name: String): Column<Long> = registerColumn(name, LongColumnType())
 
-    fun date(name: String): Column<DateTime> = registerColumn(name, DateColumnType(false))
-
     fun bool(name: String): Column<Boolean> = registerColumn(name, BooleanColumnType())
-
-    fun datetime(name: String): Column<DateTime> = registerColumn(name, DateColumnType(true))
 
     /**
      * @sample org.jetbrains.exposed.sql.tests.shared.EntityTests.testBlobField

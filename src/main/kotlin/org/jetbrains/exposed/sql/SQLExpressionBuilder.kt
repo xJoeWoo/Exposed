@@ -2,14 +2,9 @@ package org.jetbrains.exposed.sql
 
 import org.jetbrains.exposed.sql.vendors.FunctionProvider
 import org.jetbrains.exposed.sql.vendors.currentDialect
-import org.joda.time.DateTime
 import java.math.BigDecimal
 
 fun Column<*>.count() = Count(this)
-
-fun <T: DateTime?> Expression<T>.date() = Date(this)
-
-fun <T: DateTime?> Expression<T>.month() = Month(this)
 
 fun Column<*>.countDistinct() = Count(this, true)
 
@@ -125,7 +120,6 @@ object SqlExpressionBuilder {
         is Int -> intLiteral(value)
         is Long -> longLiteral(value)
         is String -> stringLiteral(value)
-        is DateTime -> if ((columnType as DateColumnType).time) dateTimeLiteral(value) else dateLiteral(value)
         else -> LiteralOp<T>(columnType, value)
     } as LiteralOp<T>
 
