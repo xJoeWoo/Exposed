@@ -7,7 +7,6 @@ import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.tests.*
 import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.vendors.*
-import org.joda.time.DateTime
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.sql.SQLException
@@ -56,7 +55,7 @@ class DDLTests : DatabaseTestsBase() {
         val TestTable = object : Table("test_table") {
             val id = integer("id").primaryKey()
             val name = varchar("name", length = 42)
-            val time = datetime<DateTime>("time").uniqueIndex()
+            val time = datetime<Date>("time").uniqueIndex()
         }
 
         withTables(excludeSettings = listOf(TestDB.H2_MYSQL), tables = TestTable) {
@@ -190,23 +189,23 @@ class DDLTests : DatabaseTestsBase() {
     }
 
     @Test fun testDefaults01() {
-        val currentDT = dateProvider<DateTime>().CurrentDateTime()
-        val nowExpression = object : Expression<DateTime>() {
+        val currentDT = dateProvider<Date>().CurrentDateTime()
+        val nowExpression = object : Expression<Date>() {
             override fun toSQL(queryBuilder: QueryBuilder) = when (currentDialect) {
                 is OracleDialect -> "SYSDATE"
                 is SQLServerDialect -> "GETDATE()"
                 else -> "NOW()"
             }
         }
-        val dtLiteral = dateProvider<DateTime>().dateLiteral(DateTime.parse("2010-01-01"))
+        val dtLiteral = dateProvider<Date>().dateLiteral(Date(2010, 1, 1))
         val TestTable = object : Table("t") {
             val s = varchar("s", 100).default("test")
             val l = long("l").default(42)
             val c = char("c").default('X')
-            val t1 = datetime<DateTime>("t1").defaultExpression(currentDT)
-            val t2 = datetime<DateTime>("t2").defaultExpression(nowExpression)
-            val t3 = datetime<DateTime>("t3").defaultExpression(dtLiteral)
-            val t4 = date<DateTime>("t4").default(DateTime.parse("2010-01-01"))
+            val t1 = datetime<Date>("t1").defaultExpression(currentDT)
+            val t2 = datetime<Date>("t2").defaultExpression(nowExpression)
+            val t3 = datetime<Date>("t3").defaultExpression(dtLiteral)
+            val t4 = date<Date>("t4").default(Date(2010, 1, 1))
         }
 
         fun Expression<*>.itOrNull() = when {

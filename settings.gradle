@@ -1,5 +1,8 @@
 rootProject.name='exposed'
 include 'spring-transaction'
-include 'extensions:data-types:joda-time'
-findProject(':extensions:data-types:joda-time')?.name = 'exposed-jodatime'
+include 'joda-time'
+include 'extensions:data-types:java8-time'
+findProject(':joda-time')?.projectDir = new File('../extensions/data-types/joda-time')
+findProject(':joda-time')?.name = 'exposed-jodatime'
+findProject(':extensions:data-types:java8-time')?.name = 'exposed-java8-time'
 

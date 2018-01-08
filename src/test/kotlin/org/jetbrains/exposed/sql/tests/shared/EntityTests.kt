@@ -7,7 +7,6 @@ import org.jetbrains.exposed.sql.tests.dateProvider
 import org.jetbrains.exposed.sql.tests.datetime
 import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.inTopLevelTransaction
-import org.joda.time.DateTime
 import org.junit.Test
 import java.util.*
 import java.util.concurrent.atomic.AtomicInteger
@@ -151,7 +150,7 @@ class EntityTests: DatabaseTestsBase() {
 
     object TableWithDBDefault : IntIdTable() {
         val field = varchar("field", 100)
-        val t1 = datetime<DateTime>("t1").defaultExpression(dateProvider<DateTime>().CurrentDateTime())
+        val t1 = datetime<Date>("t1").defaultExpression(dateProvider<Date>().CurrentDateTime())
     }
 
     class DBDefault(id: EntityID<Int>): IntEntity(id) {
@@ -174,7 +173,7 @@ class EntityTests: DatabaseTestsBase() {
                     DBDefault.new { field = "1" },
                     DBDefault.new {
                         field = "2"
-                        b1 = DateTime.now().minusDays(5)
+                        b1 = Date().apply { date -= 5 }
                     })
             flushCache()
             created.forEach {
@@ -191,7 +190,7 @@ class EntityTests: DatabaseTestsBase() {
             val created = listOf(
                     DBDefault.new{
                         field = "2"
-                        b1 = DateTime.now().minusDays(5)
+                        b1 = Date().apply { date -= 5 }
                     }, DBDefault.new{ field = "1" })
 
             flushCache()

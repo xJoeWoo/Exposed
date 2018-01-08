@@ -17,7 +17,7 @@ open class DataTypeProvider {
 
     open fun uuidType() = "BINARY(16)"
 
-    open fun dateTimeType() = "DATETIME"
+    open fun dateTimeType(type: DateType) = if(type == DateType.DATE) "DATE" else "DATETIME"
 
     open fun blobType(): String = "BLOB"
 
