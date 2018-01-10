@@ -1,6 +1,7 @@
 package org.jetbrains.exposed.sql.vendors
 
 import org.jetbrains.exposed.sql.Column
+import org.jetbrains.exposed.sql.DateType
 import org.jetbrains.exposed.sql.Expression
 import org.jetbrains.exposed.sql.ReferenceOption
 
@@ -17,11 +18,10 @@ internal object SQLServerDataTypeProvider : DataTypeProvider() {
 
     override fun booleanToStatementString(bool: Boolean) = if (bool) "1" else "0"
 
-    override fun dateTimeType() = "DATETIME2"
+    override fun dateTimeType(type: DateType) = "DATETIME2"
 }
 
 internal object SQLServerFunctionProvider : FunctionProvider() {
-
     override fun random(seed: Int?) = if (seed != null) "RAND(${seed})" else "RAND(CHECKSUM(NEWID()))"
 }
 

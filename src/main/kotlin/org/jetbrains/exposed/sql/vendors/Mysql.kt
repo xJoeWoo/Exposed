@@ -7,7 +7,7 @@ import java.util.*
 
 
 internal object MysqlDataTypeProvider : DataTypeProvider() {
-    override fun dateTimeType(): String = if ((currentDialect as MysqlDialect).isFractionDateTimeSupported()) "DATETIME(6)" else "DATETIME"
+    override fun dateTimeType(type: DateType) = if ((currentDialect as MysqlDialect).isFractionDateTimeSupported()) "DATETIME(6)" else "DATETIME"
 }
 
 internal object MysqlFunctionProvider : FunctionProvider() {

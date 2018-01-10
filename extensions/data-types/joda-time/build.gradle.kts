@@ -2,9 +2,9 @@ import org.gradle.internal.impldep.org.junit.experimental.categories.Categories.
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 val exposed_version = rootProject.findProperty("version")
-group = "org.jetbrains.exposed.extensions.data-types"
+group = "org.jetbrains.exposed.extensions"
 
-version = exposed_version
+version = exposed_version!!
 
 buildscript {
 

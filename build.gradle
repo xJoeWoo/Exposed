@@ -63,23 +63,6 @@ artifacts {
     archives sourcesJar
 }
 
-repositories {
-    mavenLocal()
-    mavenCentral()
-    maven {
-        url 'http://oss.sonatype.org/content/repositories/snapshots'
-    }
-    maven {
-        url "http://dl.bintray.com/kotlin/kotlin"
-    }
-
-    maven {
-        url "https://packages.atlassian.com/maven-3rdparty-legacy/"
-    }
-}
-
-
-
 test {
     jvmArgs "-XX:MaxPermSize=256m"
     testLogging {
@@ -102,14 +85,25 @@ publishing {
             artifact springModule.sourcesJar
             artifactId = 'spring-transaction'
         }
+//        def name1  = "exposed_jodatime"
+//        "$name1"(MavenPublication) {
+//            def moduleName = name1.replace('_', '-')
+//            println("!!!" + moduleName)
+//            artifactId = "$moduleName"
+//            def module = findProject(":$moduleName")
+//            println(module.sourceSets.main.path)
+//            from module.components.java
+////            artifact module.sourcesJar
+//
+//        }
     }
 }
-
 
 bintray {
     user = project.hasProperty('bintrayUser') ? project.property('bintrayUser') : System.getenv('BINTRAY_USER')
     key = project.hasProperty('bintrayApiKey') ? project.property('bintrayApiKey') : System.getenv('BINTRAY_API_KEY')
-    publications = ['exposed', 'spring_transaction']
+    publications = ['exposed', 'spring_transaction', 'exposed-jodatime']
+    dryRun = true
     pkg {
         userOrg = 'kotlin'
         repo = 'exposed'
@@ -122,11 +116,11 @@ bintray {
 afterReleaseBuild.dependsOn bintrayUpload
 
 task wrapper(type: Wrapper) {
-    gradleVersion = "4.1"
+    gradleVersion = "4.4"
 }
 
-
 allprojects {
+    apply plugin: 'java'
     apply plugin: 'kotlin'
     apply plugin: 'maven-publish'
 
@@ -136,13 +130,24 @@ allprojects {
     compileTestJava.options.encoding = 'UTF-8'
 
     repositories {
+        mavenLocal()
         mavenCentral()
+        maven {
+            url 'http://oss.sonatype.org/content/repositories/snapshots'
+        }
+        maven {
+            url "http://dl.bintray.com/kotlin/kotlin"
+        }
+
+        maven {
+            url "https://packages.atlassian.com/maven-3rdparty-legacy/"
+        }
     }
 
     dependencies {
         compile "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
         compile "org.jetbrains.kotlin:kotlin-reflect:$kotlin_version"
-//        compile 'joda-time:joda-time:2.9.9'
+
         compile 'org.slf4j:slf4j-api:1.7.25'
         compileOnly 'com.h2database:h2:1.4.196'
 
@@ -152,7 +157,6 @@ allprojects {
         testCompile 'junit:junit:4.12'
         testCompile 'org.hamcrest:hamcrest-library:1.3'
         testCompile 'com.h2database:h2:1.4.196'
-//        testCompile findProject(':extensions:data-types:exposed-jodatime')
 
         testCompile "mysql:mysql-connector-java:5.1.44"
         testCompile "mysql:mysql-connector-mxj:5.0.12"

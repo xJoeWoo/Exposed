@@ -1,6 +1,7 @@
 package org.jetbrains.exposed.sql.vendors
 
 import org.jetbrains.exposed.sql.Column
+import org.jetbrains.exposed.sql.DateType
 import org.jetbrains.exposed.sql.Expression
 import org.jetbrains.exposed.sql.transactions.TransactionManager
 import java.util.*
@@ -11,7 +12,7 @@ internal object PostgreSQLDataTypeProvider : DataTypeProvider() {
 
     override fun longAutoincType(): String = "BIGSERIAL"
 
-    override fun dateTimeType(): String = "TIMESTAMP"
+    override fun dateTimeType(type: DateType): String = "TIMESTAMP"
 
     override fun uuidType(): String = "uuid"
 

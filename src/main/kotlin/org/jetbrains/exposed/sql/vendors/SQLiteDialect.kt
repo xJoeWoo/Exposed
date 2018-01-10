@@ -1,5 +1,6 @@
 package org.jetbrains.exposed.sql.vendors
 
+import org.jetbrains.exposed.sql.DateType
 import org.jetbrains.exposed.sql.Expression
 import org.jetbrains.exposed.sql.ExpressionWithColumnType
 import org.jetbrains.exposed.sql.QueryBuilder
@@ -8,7 +9,7 @@ internal object SQLiteDataTypeProvider : DataTypeProvider() {
     override fun shortAutoincType(): String = "INTEGER AUTO_INCREMENT"
     override fun longAutoincType(): String = "INTEGER AUTO_INCREMENT"
     override fun booleanToStatementString(bool: Boolean) = if (bool) "1" else "0"
-    override fun dateTimeType(): String  = "NUMERIC"
+    override fun dateTimeType(type: DateType): String  = "NUMERIC"
     override val blobAsStream: Boolean = true
 }
 
