@@ -33,11 +33,6 @@ targetCompatibility = 1.6
 
 defaultTasks 'jar'
 
-task sourcesJar(type: Jar, dependsOn: classes) {
-    classifier = 'sources'
-    from sourceSets.main.allSource
-}
-
 task exposedDialectTestWithDocker(type: Test) {
     jvmArgs += "-Dexposed.test.dialects=" + dialect
 }
@@ -59,9 +54,9 @@ dockerCompose {
     waitForHealthyStateTimeout = Duration.ofMinutes(60)
 }
 
-artifacts {
-    archives sourcesJar
-}
+//artifacts {
+//    archives sourcesJar
+//}
 
 test {
     jvmArgs "-XX:MaxPermSize=256m"
@@ -72,37 +67,10 @@ test {
     }
 }
 
-publishing {
-    publications {
-        exposed(MavenPublication) {
-            from components.java
-            artifact sourcesJar
-            artifactId = 'exposed'
-        }
-        spring_transaction(MavenPublication) {
-            def springModule = findProject(":spring-transaction")
-            from springModule.components.java
-            artifact springModule.sourcesJar
-            artifactId = 'spring-transaction'
-        }
-//        def name1  = "exposed_jodatime"
-//        "$name1"(MavenPublication) {
-//            def moduleName = name1.replace('_', '-')
-//            println("!!!" + moduleName)
-//            artifactId = "$moduleName"
-//            def module = findProject(":$moduleName")
-//            println(module.sourceSets.main.path)
-//            from module.components.java
-////            artifact module.sourcesJar
-//
-//        }
-    }
-}
-
 bintray {
     user = project.hasProperty('bintrayUser') ? project.property('bintrayUser') : System.getenv('BINTRAY_USER')
     key = project.hasProperty('bintrayApiKey') ? project.property('bintrayApiKey') : System.getenv('BINTRAY_API_KEY')
-    publications = ['exposed', 'spring_transaction', 'exposed-jodatime']
+    publications = ['mavenProject']
     dryRun = true
     pkg {
         userOrg = 'kotlin'
@@ -144,6 +112,32 @@ allprojects {
         }
     }
 
+    task sourcesJar(type: Jar, dependsOn: classes) {
+        classifier = 'sources'
+        from sourceSets.main.allSource
+        duplicatesStrategy = "exclude"
+    }
+
+//    afterEvaluate {
+//        sourcesJar
+//    }
+
+    tasks.assemble.dependsOn 'sourcesJar'
+
+    publishing {
+        publications {
+            mavenProject(MavenPublication) {
+                from components.java
+                artifact sourcesJar
+                artifactId = 'exposed'
+                groupId project.group
+                artifactId project.name
+                version project.version
+
+            }
+        }
+    }
+
     dependencies {
         compile "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
         compile "org.jetbrains.kotlin:kotlin-reflect:$kotlin_version"
@@ -170,17 +164,10 @@ allprojects {
 
 
 project(":spring-transaction") {
-    apply plugin: 'kotlin'
-
     dependencies {
         compile "org.springframework:spring-jdbc:$spring_version"
         compile "org.springframework:spring-context:$spring_version"
         compile rootProject
         testCompile "org.springframework:spring-test:$spring_version"
-    }
-
-    task sourcesJar(type: Jar, dependsOn: classes) {
-        classifier = 'sources'
-        from sourceSets.main.allSource
     }
 }

@@ -132,12 +132,12 @@ abstract class DatabaseTestsBase {
 }
 
 inline fun <reified DATE> Table.date(name: String) = when {
-    DATE::class == Date::class -> registerColumn<Date>(name, DefaultDateSPI.columnType(false))
+    DATE::class == Date::class -> registerColumn<Date>(name, DefaultDateSPI.columnType(DateType.DATE))
     else -> error("")
 }
 
 inline fun <reified DATE> Table.datetime(name: String) = when {
-    DATE::class == Date::class -> registerColumn<Date>(name, DefaultDateSPI.columnType(true))
+    DATE::class == Date::class -> registerColumn<Date>(name, DefaultDateSPI.columnType(DateType.DATETIME))
     else -> error("")
 }
 

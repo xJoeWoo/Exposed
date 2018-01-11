@@ -213,10 +213,9 @@ class DDLTests : DatabaseTestsBase() {
                 "DEFAULT ${currentDialect.dataTypeProvider.processForDefaultValue(this)} NOT NULL"
             else -> "NULL"
         }
-
         
         withTables(TestTable) {
-            val dtType = currentDialect.dataTypeProvider.dateTimeType()
+            val dtType = currentDialect.dataTypeProvider.dateTimeType(DateType.DATETIME)
             assertEquals("CREATE TABLE " + if (currentDialect.supportsIfNotExists) { "IF NOT EXISTS " } else { "" } +
                     "${"t".inProperCase()} (" +
                     "${"s".inProperCase()} VARCHAR(100) DEFAULT 'test' NOT NULL, " +
