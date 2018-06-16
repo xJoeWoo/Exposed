@@ -15,20 +15,17 @@ abstract class DateColumnType(val type: DateType): ColumnType() {
 }
 
 abstract class DateApi<T:Any> {
-    inner class Date(val expr: Expression<T?>) : Function<T>() {
+    inner class Date(val expr: Expression<out T?>) : Function<T>(columnType(DateType.DATE)) {
         override fun toSQL(queryBuilder: QueryBuilder): String
                 = currentDialect.functionProvider.cast(expr, columnType, queryBuilder)
-        override val columnType: IColumnType = columnType(DateType.DATE)
     }
 
-    inner class CurrentDateTime : Function<T>() {
+    inner class CurrentDateTime : Function<T>(columnType(DateType.DATETIME)) {
         override fun toSQL(queryBuilder: QueryBuilder) = "CURRENT_TIMESTAMP"
-        override val columnType: IColumnType = columnType(DateType.DATETIME)
     }
 
-    inner class Month(val expr: Expression<T?>) : Function<T>() {
+    inner class Month(val expr: Expression<out T?>) : Function<T>(columnType(DateType.DATE)) {
         override fun toSQL(queryBuilder: QueryBuilder): String = "MONTH(${expr.toSQL(queryBuilder)})"
-        override val columnType: IColumnType = columnType(DateType.DATE)
     }
 
     protected abstract fun columnType(type: DateType) : DateColumnType

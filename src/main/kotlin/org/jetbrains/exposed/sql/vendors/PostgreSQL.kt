@@ -11,7 +11,7 @@ internal object PostgreSQLDataTypeProvider : DataTypeProvider() {
 
     override fun longAutoincType(): String = "BIGSERIAL"
 
-    override fun dateTimeType(): String = "TIMESTAMP"
+    override fun dateTimeType(type: DateType): String = "TIMESTAMP"
 
     override fun uuidType(): String = "uuid"
 

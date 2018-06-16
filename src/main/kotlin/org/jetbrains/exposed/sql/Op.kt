@@ -2,7 +2,7 @@ package org.jetbrains.exposed.sql
 
 import org.jetbrains.exposed.dao.EntityID
 
-abstract class Op<out T> : Expression<T>() {
+abstract class Op<T> : Expression<T>() {
     object TRUE : Op<Boolean>() {
         override fun toSQL(queryBuilder: QueryBuilder): String = "TRUE"
     }

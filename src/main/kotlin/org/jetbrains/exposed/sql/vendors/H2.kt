@@ -5,8 +5,9 @@ import org.h2.jdbc.JdbcConnection
 import org.jetbrains.exposed.exceptions.throwUnsupportedException
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.TransactionManager
-import org.joda.time.DateTime
 import java.sql.Wrapper
+import java.text.DateFormat
+import java.util.*
 
 internal object H2DataTypeProvider : DataTypeProvider() {
     override fun uuidType(): String = "UUID"
@@ -19,9 +20,11 @@ internal object H2FunctionProvider : FunctionProvider() {
 
     private val isMySQLMode: Boolean get() = currentMode() == "MySQL"
 
-    private fun dbReleaseDate(transaction: Transaction) : DateTime {
+    private val RELEASE_DATE_1_4_197 = DateFormat.getDateInstance().parse("2018-03-18")
+
+    private fun dbReleaseDate(transaction: Transaction) : Date {
         val releaseDate = transaction.db.metadata.databaseProductVersion.substringAfterLast('(').substringBeforeLast(')')
-        return DateTime.parse(releaseDate)
+        return DateFormat.getDateInstance().parse(releaseDate)
     }
 
     override fun replace(table: Table, data: List<Pair<Column<*>, Any?>>, transaction: Transaction): String {
@@ -41,7 +44,7 @@ internal object H2FunctionProvider : FunctionProvider() {
         val uniqueCols = columns.filter { it.indexInPK != null || it in uniqueIdxCols}
         return when {
             // INSERT IGNORE support added in H2 version 1.4.197 (2018-03-18)
-            ignore && uniqueCols.isNotEmpty() && isMySQLMode && dbReleaseDate(transaction).isBefore(DateTime.parse("2018-03-18")) -> {
+            ignore && uniqueCols.isNotEmpty() && isMySQLMode && dbReleaseDate(transaction) < RELEASE_DATE_1_4_197 -> {
                 val def = super.insert(false, table, columns, expr, transaction)
                 def + " ON DUPLICATE KEY UPDATE " + uniqueCols.joinToString { "${transaction.identity(it)}=VALUES(${transaction.identity(it)})" }
             }
