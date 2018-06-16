@@ -141,7 +141,7 @@ class Join (val table: ColumnSet) : ColumnSet() {
 }
 
 open class Table(name: String = ""): ColumnSet(), DdlAware {
-    open val tableName = (if (name.isNotEmpty()) name else this.javaClass.simpleName.removeSuffix("Table"))
+    open val tableName = if (name.isNotEmpty()) name else this.javaClass.simpleName.removeSuffix("Table")
 
     fun nameInDatabaseCase() = tableName.inProperCase()
 
@@ -152,7 +152,8 @@ open class Table(name: String = ""): ColumnSet(), DdlAware {
 
     override fun describe(s: Transaction): String = s.identity(this)
 
-    val indices = ArrayList<Pair<Array<out Column<*>>, Boolean>>()
+    val indices = ArrayList<Index>()
+    val checkConstraints = ArrayList<Pair<String, Op<Boolean>>>()
 
     override val fields: List<Expression<*>>
         get() = columns
@@ -186,15 +187,15 @@ open class Table(name: String = ""): ColumnSet(), DdlAware {
     }
 
     @Suppress("UNCHECKED_CAST")
-    fun <T:Any> Column<T>.entityId(): Column<EntityID<T>> = replaceColumn(this, Column<EntityID<T>>(table, name, EntityIDColumnType(this)).apply {
+    fun <T:Comparable<T>> Column<T>.entityId(): Column<EntityID<T>> = replaceColumn(this, Column<EntityID<T>>(table, name, EntityIDColumnType(this)).apply {
         this.indexInPK = this@entityId.indexInPK
         this.defaultValueFun = this@entityId.defaultValueFun?.let { { EntityID(it(), table as IdTable<T>) } }
     })
 
-    fun <ID:Any> entityId(name: String, table: IdTable<ID>) : Column<EntityID<ID>> {
+    fun <ID:Comparable<ID>> entityId(name: String, table: IdTable<ID>) : Column<EntityID<ID>> {
         val originalColumn = (table.id.columnType as EntityIDColumnType<*>).idColumn
         val columnTypeCopy = originalColumn.columnType.let { (it as? AutoIncColumnType)?.delegate ?: it }.clone()
-        val answer = Column<EntityID<ID>>(this, name, EntityIDColumnType(Column(table, name, columnTypeCopy)))
+        val answer = Column<EntityID<ID>>(this, name, EntityIDColumnType(Column<ID>(table, name, columnTypeCopy)))
         _columns.add(answer)
         return answer
     }
@@ -207,31 +208,119 @@ open class Table(name: String = ""): ColumnSet(), DdlAware {
         primaryConstructor!!.callBy(consParams.associate { it to allParams[it.name] })
     }
 
+    /**
+     * An enumeration column where enumerations are stored by their ordinal integer.
+     *
+     * @param name The column name
+     * @param klass The enum class
+     */
     fun <T:Enum<T>> enumeration(name: String, klass: Class<T>): Column<T> = registerColumn(name, EnumerationColumnType(klass))
 
+    /**
+     * An enumeration column where enumerations are stored by their name.
+     *
+     * @param name The column name
+     * @param length The maximum length of the enumeration name
+     * @param klass The enum class
+     */
     fun <T:Enum<T>> enumerationByName(name: String, length: Int, klass: Class<T>): Column<T> = registerColumn(name, EnumerationNameColumnType(klass, length))
 
+    fun <T:Enum<T>> customEnumeration(name: String, sql: String? = null, fromDb: (Any) -> T, toDb: (T) -> Any) =
+        registerColumn<T>(name, object : ColumnType() {
+            override fun sqlType(): String = sql ?: error("Column $name should exists in database ")
+            override fun valueFromDB(value: Any) = fromDb(value)
+            override fun notNullValueToDB(value: Any) = toDb(value as T)
+        })
+
+    /**
+     * An integer column to store an integer number.
+     *
+     * @param name The column name
+     */
     fun integer(name: String): Column<Int> = registerColumn(name, IntegerColumnType())
 
+    /**
+     * A char column to store a single character.
+     *
+     * @param name The column name
+     */
     fun char(name: String): Column<Char> = registerColumn(name, CharacterColumnType())
 
+    /**
+     * A decimal column to store a decimal number with a set [precision] and [scale].
+     *
+     * [precision] sets the total amount of digits to store (including the digits behind the decimal point).
+     * [scale] sets the amount of digits to store behind the decimal point.
+     *
+     * So to store the decimal 123.45, [precision] would have to be set to 5 (as there are five digits in total) and [scale] to 2 (as there are two digits behind the decimal point).
+     *
+     * @param name The column name
+     * @param precision The amount of digits to store in total (including the digits behind the decimal point)
+     * @param scale The amount of digits to store behind the decimal point
+     */
     fun decimal(name: String, precision: Int, scale: Int): Column<BigDecimal> = registerColumn(name, DecimalColumnType(precision, scale))
 
+    /**
+     * A float column to store a float number
+     *
+     * @see decimal for more details
+     *
+     */
+    fun float(name: String): Column<Float> = registerColumn(name, FloatColumnType())
+
+    /**
+     * A long column to store a large (long) number.
+     *
+     * @param name The column name
+     */
     fun long(name: String): Column<Long> = registerColumn(name, LongColumnType())
 
+    /**
+     * A bool column to store a boolean value.
+     *
+     * @param name The column name
+     */
     fun bool(name: String): Column<Boolean> = registerColumn(name, BooleanColumnType())
 
     /**
+     * A blob column to store a large amount of binary data.
+     *
      * @sample org.jetbrains.exposed.sql.tests.shared.EntityTests.testBlobField
+     *
+     * @param name The column name
      */
     fun blob(name: String): Column<Blob> = registerColumn(name, BlobColumnType())
 
+    /**
+     * A text column to store a large amount of text.
+     *
+     * @param name The column name
+     * @param collate The text collate type. Set to null to use the default type.
+     */
     fun text(name: String, collate: String? = null): Column<String> = registerColumn(name, TextColumnType(collate))
 
+    /**
+     * A binary column to store an array of bytes.
+     *
+     * @param name The column name
+     * @param length The maximum amount of bytes to store
+     */
     fun binary(name: String, length: Int): Column<ByteArray> = registerColumn(name, BinaryColumnType(length))
 
+    /**
+     * A uuid column to store a UUID.
+     *
+     * @param name The column name
+     */
     fun uuid(name: String) = registerColumn<UUID>(name, UUIDColumnType())
 
+    /**
+     * A varchar column to store a string with a set maximum amount of characters.
+     *
+     * @param name The column name
+     * @param length The maximum amount of characters
+     * @param collate The text collate type. Set to null to use the default type.
+     */
     fun varchar(name: String, length: Int, collate: String? = null): Column<String> = registerColumn(name, VarCharColumnType(length, collate))
 
     private fun <T> Column<T>.cloneWithAutoInc(idSeqName: String?) : Column<T> = when(columnType) {
@@ -246,7 +335,7 @@ open class Table(name: String = ""): ColumnSet(), DdlAware {
     }
 
 
-    fun <N:Any> Column<EntityID<N>>.autoinc(idSeqName: String? = null): Column<EntityID<N>> = cloneWithAutoInc(idSeqName).apply {
+    fun <N:Comparable<N>> Column<EntityID<N>>.autoinc(idSeqName: String? = null): Column<EntityID<N>> = cloneWithAutoInc(idSeqName).apply {
         replaceColumn(this@autoinc, this)
     }
 
@@ -257,7 +346,7 @@ open class Table(name: String = ""): ColumnSet(), DdlAware {
 
     infix fun <T, S: T, C:Column<S>> C.references(ref: Column<T>): C = references(ref, null)
 
-    fun <T:Any> reference(name: String, foreign: IdTable<T>, onDelete: ReferenceOption? = null): Column<EntityID<T>> =
+    fun <T:Comparable<T>> reference(name: String, foreign: IdTable<T>, onDelete: ReferenceOption? = null): Column<EntityID<T>> =
             entityId(name, foreign).references(foreign.id, onDelete)
 
     fun<T> Table.reference(name: String, pkColumn: Column<T>): Column<T> {
@@ -266,15 +355,16 @@ open class Table(name: String = ""): ColumnSet(), DdlAware {
         return column
     }
 
-    fun <T:Any> optReference(name: String, foreign: IdTable<T>, onDelete: ReferenceOption? = null): Column<EntityID<T>?> =
+    fun <T:Comparable<T>> optReference(name: String, foreign: IdTable<T>, onDelete: ReferenceOption? = null): Column<EntityID<T>?> =
             entityId(name, foreign).references(foreign.id, onDelete).nullable()
 
     fun <T:Any> Column<T>.nullable(): Column<T?> {
         val newColumn = Column<T?> (table, name, columnType)
         newColumn.referee = referee
-        newColumn.onDelete = onDelete
+        newColumn.onDelete = onDelete.takeIf { it != currentDialectIfAvailable?.defaultReferenceOption }
         newColumn.defaultValueFun = defaultValueFun
-        newColumn.dbDefaultValue = dbDefaultValue
+        @Suppress("UNCHECKED_CAST")
+        newColumn.dbDefaultValue = dbDefaultValue as Expression<T?>?
         newColumn.columnType.nullable = true
         return replaceColumn (this, newColumn)
     }
@@ -300,17 +390,47 @@ open class Table(name: String = ""): ColumnSet(), DdlAware {
     }
 
     fun index (isUnique: Boolean = false, vararg columns: Column<*>) {
-        indices.add(columns to isUnique)
+        index(null, isUnique, *columns)
     }
 
-    fun<T> Column<T>.index(isUnique: Boolean = false) : Column<T> = apply {
-        table.index(isUnique, this)
+    fun index (customIndexName:String? = null, isUnique: Boolean = false, vararg columns: Column<*>) {
+        indices.add(Index(columns.toList(), isUnique, customIndexName))
     }
 
-    fun<T> Column<T>.uniqueIndex() : Column<T> = index(true)
+    fun<T> Column<T>.index(customIndexName:String? = null, isUnique: Boolean = false) : Column<T> = apply {
+        table.index(customIndexName, isUnique, this)
+    }
+
+    fun<T> Column<T>.uniqueIndex(customIndexName:String? = null) : Column<T> = index(customIndexName,true)
 
     fun uniqueIndex(vararg columns: Column<*>) {
-        index(true, *columns)
+        index(null,true, *columns)
+    }
+
+    fun uniqueIndex(customIndexName:String? = null, vararg columns: Column<*>) {
+        index(customIndexName,true, *columns)
+    }
+
+    /**
+     * Creates a check constraint in this column.
+     * @param name The name to identify the constraint, optional. Must be **unique** (case-insensitive) to this table, otherwise, the constraint will
+     * not be created. All names are [trimmed][String.trim], blank names are ignored and the database engine decides the default name.
+     * @param op The expression against which the newly inserted values will be compared.
+     */
+    fun <T> Column<T>.check(name: String = "", op: SqlExpressionBuilder.(Column<T>) -> Op<Boolean>) = apply {
+        table.checkConstraints.takeIf { name.isEmpty() || it.none { it.first.equals(name, true) } }?.add(name to SqlExpressionBuilder.op(this))
+                ?: exposedLogger.warn("A CHECK constraint with name '$name' was ignored because there is already one with that name")
+    }
+
+    /**
+     * Creates a check constraint in this table.
+     * @param name The name to identify the constraint, optional. Must be **unique** (case-insensitive) to this table, otherwise, the constraint will
+     * not be created. All names are [trimmed][String.trim], blank names are ignored and the database engine decides the default name.
+     * @param op The expression against which the newly inserted values will be compared.
+     */
+    fun check(name: String = "", op: SqlExpressionBuilder.() -> Op<Boolean>) {
+        checkConstraints.takeIf { name.isEmpty() || it.none { it.first.equals(name, true) } }?.add(name to SqlExpressionBuilder.op())
+                ?: exposedLogger.warn("A CHECK constraint with name '$name' was ignored because there is already one with that name")
     }
 
     val ddl: List<String>
@@ -338,6 +458,14 @@ open class Table(name: String = ""): ColumnSet(), DdlAware {
                     if (references.isNotEmpty()) {
                         append(references.joinToString(prefix = ", ", separator = ", ") { ForeignKeyConstraint.from(it).foreignKeyPart })
                     }
+                }
+                if (checkConstraints.isNotEmpty()) {
+                    append(
+                        checkConstraints.mapIndexed { index, (name, op) ->
+                            val resolvedName = name.takeIf { it.isNotBlank() } ?: "check_${tableName}_$index"
+                            CheckConstraint.from(this@Table, resolvedName, op).checkPart
+                        }.joinToString(prefix = ",", separator = ",")
+                    )
                 }
 
                 append(")")

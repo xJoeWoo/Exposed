@@ -4,6 +4,7 @@ import org.jetbrains.exposed.dao.IdTable
 import org.jetbrains.exposed.sql.statements.Statement
 import org.jetbrains.exposed.sql.statements.StatementType
 import org.jetbrains.exposed.sql.transactions.TransactionManager
+import org.jetbrains.exposed.sql.vendors.currentDialect
 import java.sql.PreparedStatement
 import java.sql.ResultSet
 import java.util.*
@@ -16,22 +17,22 @@ class ResultRow(size: Int, private val fieldIndex: Map<Expression<*>, Int>) {
      */
     @Suppress("UNCHECKED_CAST")
     operator fun <T> get(c: Expression<T>) : T {
-        val d:Any? = getRaw(c)
-
-        return d?.let {
-            if (d == NotInitializedValue) error("${c.toSQL(QueryBuilder(false))} is not initialized yet")
-            (c as? ExpressionWithColumnType<T>)?.columnType?.valueFromDB(it) ?: it ?: run {
-                val column = c as? Column<T>
-                if (column?.dbDefaultValue != null && column.columnType.nullable == false) {
-                    exposedLogger.warn("Column ${TransactionManager.current().identity(column)} is marked as not null, " +
+        val d = getRaw(c)
+        return when {
+            d == null && c is Column<*> && c.dbDefaultValue != null && !c.columnType.nullable -> {
+                exposedLogger.warn("Column ${TransactionManager.current().identity(c)} is marked as not null, " +
                             "has default db value, but returns null. Possible have to re-read it from DB.")
-                }
                 null
             }
+            d == null -> null
+            d == NotInitializedValue -> error("${c.toSQL(QueryBuilder(false))} is not initialized yet")
+            c is ExpressionAlias<T> && c.delegate is ExpressionWithColumnType<T> -> c.delegate.columnType.valueFromDB(d)
+            c is ExpressionWithColumnType<T> -> c.columnType.valueFromDB(d)
+            else -> d
         } as T
     }
 
-    operator fun <T> set(c: Expression<T>, value: T) {
+    operator fun <T> set(c: Expression<out T>, value: T) {
         val index = fieldIndex[c] ?: error("${c.toSQL(QueryBuilder(false))} is not in record set")
         data[index] = value
     }
@@ -73,7 +74,8 @@ enum class SortOrder {
     ASC, DESC
 }
 
-open class Query(val transaction: Transaction, set: FieldSet, where: Op<Boolean>?): SizedIterable<ResultRow>, Statement<ResultSet>(StatementType.SELECT, set.source.targetTables()) {
+open class Query(set: FieldSet, where: Op<Boolean>?): SizedIterable<ResultRow>, Statement<ResultSet>(StatementType.SELECT, set.source.targetTables()) {
+    private val transaction get() = TransactionManager.current()
     var groupedByColumns: List<Expression<*>> = mutableListOf()
         private set
     var orderByExpressions: List<Pair<Expression<*>, SortOrder>> = mutableListOf()
@@ -117,7 +119,7 @@ open class Query(val transaction: Transaction, set: FieldSet, where: Op<Boolean>
     fun adjustWhere(body: Op<Boolean>?.() -> Op<Boolean>): Query = apply { where = where.body() }
 
     fun hasCustomForUpdateState() = forUpdate != null
-    fun isForUpdate() = (forUpdate ?: transaction.selectsForUpdate) && transaction.db.dialect.supportsSelectForUpdate()
+    fun isForUpdate() = (forUpdate ?: false) && currentDialect.supportsSelectForUpdate()
 
     override fun PreparedStatement.executeInternal(transaction: Transaction): ResultSet? = executeQuery()
 
@@ -170,7 +172,7 @@ open class Query(val transaction: Transaction, set: FieldSet, where: Op<Boolean>
 
             limit?.let {
                 append(" ")
-                append(transaction.db.dialect.limit(it, offset, orderByExpressions.isNotEmpty()))
+                append(currentDialect.functionProvider.queryLimit(it, offset, orderByExpressions.isNotEmpty()))
             }
         }
 
@@ -240,7 +242,7 @@ open class Query(val transaction: Transaction, set: FieldSet, where: Op<Boolean>
             }
         }
 
-        operator override fun next(): ResultRow {
+        override operator fun next(): ResultRow {
             if (hasNext == null) hasNext()
             if (hasNext == false) throw NoSuchElementException()
             hasNext = null
@@ -260,7 +262,7 @@ open class Query(val transaction: Transaction, set: FieldSet, where: Op<Boolean>
         transaction.entityCache.flush(tables)
     }
 
-    operator override fun iterator(): Iterator<ResultRow> {
+    override operator fun iterator(): Iterator<ResultRow> {
         flushEntities()
         val resultIterator = ResultIterator(transaction.exec(this)!!)
         return if (transaction.db.supportsMultipleResultSets)

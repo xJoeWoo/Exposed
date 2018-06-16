@@ -1,5 +1,6 @@
 package org.jetbrains.exposed.sql.transactions
 
+import org.jetbrains.exposed.exceptions.ExposedSQLException
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.Transaction
 import org.jetbrains.exposed.sql.exposedLogger
@@ -52,16 +53,24 @@ class ThreadLocalTransactionManager(private val db: Database,
     }
 }
 
-fun <T> transaction(statement: Transaction.() -> T): T = transaction(TransactionManager.manager.defaultIsolationLevel, 3, statement)
+fun <T> transaction(db: Database? = null, statement: Transaction.() -> T): T = transaction(TransactionManager.manager.defaultIsolationLevel, 3, db, statement)
 
-fun <T> transaction(transactionIsolation: Int, repetitionAttempts: Int, statement: Transaction.() -> T): T {
+fun <T> transaction(transactionIsolation: Int, repetitionAttempts: Int, db: Database? = null, statement: Transaction.() -> T): T {
     val outer = TransactionManager.currentOrNull()
 
-    return if (outer != null) {
+    return if (outer != null && (db == null || outer.db == db)) {
         outer.statement()
-    }
-    else {
-        inTopLevelTransaction(transactionIsolation, repetitionAttempts, statement)
+    } else {
+        val existingForDb = db?.let { TransactionManager.managerFor(it) }
+        existingForDb?.currentOrNull()?.let {
+            val currentManager = TransactionManager.manager
+            try {
+                TransactionManager.resetCurrent(existingForDb)
+                it.statement()
+            } finally {
+                TransactionManager.resetCurrent(currentManager)
+            }
+        } ?: inTopLevelTransaction(transactionIsolation, repetitionAttempts, existingForDb, statement)
     }
 }
 
@@ -81,11 +90,12 @@ private inline fun TransactionInterface.closeLoggingException(log: (Exception) -
     }
 }
 
-fun <T> inTopLevelTransaction(transactionIsolation: Int, repetitionAttempts: Int, statement: Transaction.() -> T): T {
+fun <T> inTopLevelTransaction(transactionIsolation: Int, repetitionAttempts: Int, manager: TransactionManager? = null, statement: Transaction.() -> T): T {
     var repetitions = 0
 
+    val outerManager = TransactionManager.manager.takeIf { TransactionManager.currentOrNull() != null }
     while (true) {
-
+        manager?.let { TransactionManager.resetCurrent(it) }
         val transaction = TransactionManager.manager.newTransaction(transactionIsolation)
 
         try {
@@ -94,8 +104,13 @@ fun <T> inTopLevelTransaction(transactionIsolation: Int, repetitionAttempts: Int
             return answer
         }
         catch (e: SQLException) {
-            val currentStatement = transaction.currentStatement
-            exposedLogger.info("Transaction attempt #$repetitions failed: ${e.message}. Statement: $currentStatement", e)
+            val exposedSQLException = e as? ExposedSQLException
+            val queriesToLog = exposedSQLException?.causedByQueries()?.joinToString(";\n") ?: "${transaction.currentStatement}"
+            val message = "Transaction attempt #$repetitions failed: ${e.message}. Statement(s): $queriesToLog"
+            exposedSQLException?.contexts?.forEach {
+                transaction.logger.log(it, transaction)
+            }
+            exposedLogger.info(message, e)
             transaction.rollbackLoggingException { exposedLogger.warn("Transaction rollback failed: ${it.message}. See previous log line for statement", it) }
             repetitions++
             if (repetitions >= repetitionAttempts) {
@@ -108,7 +123,7 @@ fun <T> inTopLevelTransaction(transactionIsolation: Int, repetitionAttempts: Int
             throw e
         }
         finally {
-            TransactionManager.removeCurrent()
+            TransactionManager.resetCurrent(outerManager)
             val currentStatement = transaction.currentStatement
             try {
                 currentStatement?.let {

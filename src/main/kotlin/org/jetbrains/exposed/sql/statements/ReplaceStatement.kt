@@ -7,6 +7,5 @@ import org.jetbrains.exposed.sql.Transaction
  * @author max
  */
 class ReplaceStatement<Key:Any>(table: Table) : InsertStatement<Key>(table) {
-
-    override fun prepareSQL(transaction: Transaction): String = transaction.db.dialect.replace(table, valuesAndDefaults().toList(), transaction)
+    override fun prepareSQL(transaction: Transaction): String = transaction.db.dialect.functionProvider.replace(table, arguments!!.first(), transaction)
 }

@@ -1,6 +1,7 @@
 package org.jetbrains.exposed.sql.tests.shared
 
 import org.jetbrains.exposed.dao.*
+import org.jetbrains.exposed.exceptions.EntityNotFoundException
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.tests.DatabaseTestsBase
 import org.jetbrains.exposed.sql.tests.dateProvider
@@ -304,7 +305,7 @@ class EntityTests: DatabaseTestsBase() {
 
     @Test
     fun testInsertChildWithoutFlush() {
-        withTables(Posts) {
+        withTables(Boards, Posts) {
             val parent = Post.new {  }
             Post.new { this.parent = parent } // first flush before referencing
             assertEquals(2, Post.all().count())
@@ -336,7 +337,7 @@ class EntityTests: DatabaseTestsBase() {
 
     @Test
     fun testInsertChildWithFlush() {
-        withTables(Posts) {
+        withTables(Boards, Posts) {
             val parent = Post.new {  }
             flushCache()
             assertNotNull(parent.id._value)
@@ -347,7 +348,7 @@ class EntityTests: DatabaseTestsBase() {
 
     @Test
     fun testInsertChildWithChild() {
-        withTables(Posts) {
+        withTables(Boards, Posts) {
             val parent = Post.new {  }
             val child1 = Post.new { this.parent = parent }
             Post.new { this.parent = child1 }
@@ -368,12 +369,14 @@ class EntityTests: DatabaseTestsBase() {
         }
     }
 
-    @Test(expected = IllegalStateException::class)
+    @Test
     fun testErrorOnSetToDeletedEntity() {
         withTables(Boards) {
-            val board = Board.new { name = "irrelevant" }
-            board.delete()
-            board.name = "Cool"
+            expectException<EntityNotFoundException> {
+                val board = Board.new { name = "irrelevant" }
+                board.delete()
+                board.name = "Cool"
+            }
         }
     }
 
@@ -438,7 +441,7 @@ class EntityTests: DatabaseTestsBase() {
 
 
     private fun <T> newTransaction(statement: Transaction.() -> T) =
-            inTopLevelTransaction(TransactionManager.current().db.metadata.defaultTransactionIsolation, 1, statement)
+            inTopLevelTransaction(TransactionManager.current().db.metadata.defaultTransactionIsolation, 1, null, statement)
 
     @Test fun sharingEntityBetweenTransactions() {
         withTables(Humans) {

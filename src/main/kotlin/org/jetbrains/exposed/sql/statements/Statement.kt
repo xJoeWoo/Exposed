@@ -1,9 +1,11 @@
 package org.jetbrains.exposed.sql.statements
 
+import org.jetbrains.exposed.exceptions.ExposedSQLException
 import org.jetbrains.exposed.sql.IColumnType
 import org.jetbrains.exposed.sql.Table
 import org.jetbrains.exposed.sql.Transaction
 import java.sql.PreparedStatement
+import java.sql.SQLException
 import java.util.*
 
 
@@ -27,40 +29,42 @@ abstract class Statement<out T>(val type: StatementType, val targets: List<Table
     fun execute(transaction: Transaction): T? = transaction.exec(this)
 
     internal fun executeIn(transaction: Transaction): Pair<T?, List<StatementContext>> {
-        try {
-            transaction.monitor.register(transaction.logger)
-
-            val arguments = arguments()
-            val contexts = if (arguments.count() > 0) {
-                arguments.map { args ->
-                    val context = StatementContext(this, args)
-                    transaction.monitor.notifyBeforeExecution(transaction, context)
-                    context
-                }
-            } else {
-                val context = StatementContext(this, emptyList())
-                transaction.monitor.notifyBeforeExecution(transaction, context)
-                listOf(context)
+        val arguments = arguments()
+        val contexts = if (arguments.count() > 0) {
+            arguments.map { args ->
+                val context = StatementContext(this, args)
+                transaction.interceptors.forEach { it.beforeExecution(transaction, context) }
+                context
             }
-
-            val statement = prepared(transaction, prepareSQL(transaction))
-            contexts.forEachIndexed { i, context ->
-                statement.fillParameters(context.args)
-                // REVIEW
-                if (contexts.size > 1 || isAlwaysBatch) statement.addBatch()
-            }
-            if (!transaction.db.supportsMultipleResultSets) transaction.closeExecutedStatements()
-
-            transaction.currentStatement = statement
-            val result = statement.executeInternal(transaction)
-            transaction.currentStatement = null
-            transaction.executedStatements.add(statement)
-
-            transaction.monitor.notifyAfterExecution(transaction, contexts, statement)
-            return result to contexts
-        } finally {
-            transaction.monitor.unregister(transaction.logger)
+        } else {
+            val context = StatementContext(this, emptyList())
+            transaction.interceptors.forEach { it.beforeExecution(transaction, context) }
+            listOf(context)
         }
+
+        val statement = try {
+            prepared(transaction, prepareSQL(transaction))
+        } catch (e: SQLException) {
+            throw ExposedSQLException(e, contexts, transaction)
+        }
+        contexts.forEachIndexed { i, context ->
+            statement.fillParameters(context.args)
+            // REVIEW
+            if (contexts.size > 1 || isAlwaysBatch) statement.addBatch()
+        }
+        if (!transaction.db.supportsMultipleResultSets) transaction.closeExecutedStatements()
+
+        transaction.currentStatement = statement
+        val result = try {
+            statement.executeInternal(transaction)
+        } catch (e: SQLException) {
+            throw ExposedSQLException(e, contexts, transaction)
+        }
+        transaction.currentStatement = null
+        transaction.executedStatements.add(statement)
+
+        transaction.interceptors.forEach { it.afterExecution(transaction, contexts, statement) }
+        return result to contexts
     }
 }
 
