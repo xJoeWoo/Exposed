@@ -35,7 +35,7 @@ repositories {
 
 dependencies {
     compile(rootProject)
-    testCompile(rootProject)
+    testCompile(rootProject.files("/out/test/classes"))
 }
 
 

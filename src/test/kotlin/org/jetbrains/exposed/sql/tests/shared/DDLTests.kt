@@ -220,6 +220,7 @@ class DDLTests : DatabaseTestsBase() {
 
         withTables(TestTable) {
             val dtType = currentDialect.dataTypeProvider.dateTimeType(DateType.DATETIME)
+            val dType = currentDialect.dataTypeProvider.dateTimeType(DateType.DATE)
             assertEquals("CREATE TABLE " + if (currentDialect.supportsIfNotExists) { "IF NOT EXISTS " } else { "" } +
                     "${"t".inProperCase()} (" +
                     "${"s".inProperCase()} VARCHAR(100) DEFAULT 'test' NOT NULL, " +
@@ -228,7 +229,7 @@ class DDLTests : DatabaseTestsBase() {
                     "${"t1".inProperCase()} $dtType ${currentDT.itOrNull()}, " +
                     "${"t2".inProperCase()} $dtType ${nowExpression.itOrNull()}, " +
                     "${"t3".inProperCase()} $dtType ${dtLiteral.itOrNull()}, " +
-                    "${"t4".inProperCase()} DATE ${dtLiteral.itOrNull()}" +
+                    "${"t4".inProperCase()} $dType ${dtLiteral.itOrNull()}" +
                 ")", TestTable.ddl)
         }
     }

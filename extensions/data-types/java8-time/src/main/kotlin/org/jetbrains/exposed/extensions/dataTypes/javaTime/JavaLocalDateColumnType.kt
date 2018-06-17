@@ -11,7 +11,18 @@ import java.time.format.DateTimeFormatter
 import java.util.*
 
 
+/**
+ * A date column to store a date.
+ *
+ * @param name The column name
+ */
 fun Table.date(name: String): Column<LocalDateTime> = registerColumn(name, JavaLocalDateColumnType(DateType.DATE))
+
+/**
+ * A datetime column to store both a date and a time.
+ *
+ * @param name The column name
+ */
 fun Table.datetime(name: String): Column<LocalDateTime> = registerColumn(name, JavaLocalDateColumnType(DateType.DATETIME))
 
 private val DEFAULT_DATE_STRING_FORMATTER = DateTimeFormatter.ofPattern("YYYY-MM-dd", Locale.ROOT)
@@ -30,7 +41,7 @@ class JavaLocalDateColumnType(type: DateType): DateColumnType(type) {
             is LocalDateTime -> value
             is java.sql.Date -> value.time.millisToLocalDateTimeUTC()
             is java.sql.Timestamp -> value.time.millisToLocalDateTimeUTC()
-            else -> error("Unexpected value: $value")
+            else -> error("Unexpected value: $value of ${value::class.qualifiedName}")
         }
 
         return if (type == DateType.DATETIME)

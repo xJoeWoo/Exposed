@@ -6,7 +6,7 @@ import org.jetbrains.exposed.exceptions.throwUnsupportedException
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.TransactionManager
 import java.sql.Wrapper
-import java.text.DateFormat
+import java.text.SimpleDateFormat
 import java.util.*
 
 internal object H2DataTypeProvider : DataTypeProvider() {
@@ -20,11 +20,12 @@ internal object H2FunctionProvider : FunctionProvider() {
 
     private val isMySQLMode: Boolean get() = currentMode() == "MySQL"
 
-    private val RELEASE_DATE_1_4_197 = DateFormat.getDateInstance().parse("2018-03-18")
-
+    private val dateFormat = SimpleDateFormat("YYYY-MM-dd")
+    private val RELEASE_DATE_1_4_197 = dateFormat.parse("2018-03-18")
+            
     private fun dbReleaseDate(transaction: Transaction) : Date {
         val releaseDate = transaction.db.metadata.databaseProductVersion.substringAfterLast('(').substringBeforeLast(')')
-        return DateFormat.getDateInstance().parse(releaseDate)
+        return dateFormat.parse(releaseDate)
     }
 
     override fun replace(table: Table, data: List<Pair<Column<*>, Any?>>, transaction: Transaction): String {

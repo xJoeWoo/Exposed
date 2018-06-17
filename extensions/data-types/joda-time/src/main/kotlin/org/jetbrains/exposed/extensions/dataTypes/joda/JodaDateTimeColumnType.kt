@@ -1,14 +1,27 @@
 package org.jetbrains.exposed.extensions.dataTypes.joda
 
-import org.jetbrains.exposed.sql.*
-import org.joda.time.format.DateTimeFormat
+import org.jetbrains.exposed.sql.Column
+import org.jetbrains.exposed.sql.DateColumnType
+import org.jetbrains.exposed.sql.DateType
+import org.jetbrains.exposed.sql.Table
 import org.joda.time.DateTime
 import org.joda.time.DateTimeZone
+import org.joda.time.format.DateTimeFormat
 import org.joda.time.format.ISODateTimeFormat
 import java.util.*
 
-
+/**
+ * A date column to store a date.
+ *
+ * @param name The column name
+ */
 fun Table.date(name: String): Column<DateTime> = registerColumn(name, JodaDateColumnType(DateType.DATE))
+
+/**
+ * A datetime column to store both a date and a time.
+ *
+ * @param name The column name
+ */
 fun Table.datetime(name: String): Column<DateTime> = registerColumn(name, JodaDateColumnType(DateType.DATETIME))
 
 
@@ -26,7 +39,7 @@ class JodaDateColumnType(type: DateType): DateColumnType(type) {
             is DateTime -> value
             is java.sql.Date -> DateTime(value.time)
             is java.sql.Timestamp -> DateTime(value.time)
-            else -> error("Unexpected value: $value")
+            else -> error("Unexpected value: $value of ${value::class.qualifiedName}")
         }
 
         return if (type == DateType.DATETIME)

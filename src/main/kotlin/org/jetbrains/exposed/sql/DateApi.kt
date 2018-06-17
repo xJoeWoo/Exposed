@@ -55,7 +55,7 @@ object DefaultDateSPI : DateApi<java.util.Date>() {
                 is java.util.Date -> value
                 is java.sql.Date -> java.util.Date(value.time)
                 is java.sql.Timestamp -> java.util.Date(value.time)
-                else -> error("Unexpected value: $value")
+                else -> error("Unexpected value: $value of ${value::class.qualifiedName}")
             }
 
             return if (type == DateType.DATETIME)

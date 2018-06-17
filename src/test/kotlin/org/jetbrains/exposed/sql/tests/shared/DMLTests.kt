@@ -9,10 +9,12 @@ import org.jetbrains.exposed.sql.Function
 import org.jetbrains.exposed.sql.Random
 import org.jetbrains.exposed.sql.statements.BatchDataInconsistentException
 import org.jetbrains.exposed.sql.statements.BatchInsertStatement
-import org.jetbrains.exposed.sql.transactions.TransactionManager
-import org.jetbrains.exposed.sql.vendors.*
 import org.jetbrains.exposed.sql.tests.*
-import org.joda.time.DateTime
+import org.jetbrains.exposed.sql.transactions.TransactionManager
+import org.jetbrains.exposed.sql.vendors.OracleDialect
+import org.jetbrains.exposed.sql.vendors.PostgreSQLDialect
+import org.jetbrains.exposed.sql.vendors.SQLServerDialect
+import org.jetbrains.exposed.sql.vendors.currentDialect
 import org.junit.Assert.assertThat
 import org.junit.Test
 import java.math.BigDecimal
@@ -849,7 +851,7 @@ class DMLTests : DatabaseTestsBase() {
         }
     }
 
-    private fun DMLTestsData.Misc.checkRow(row: ResultRow, n: Int, nn: Int?, d: Date, dn: Date?, t: Date, tn: Date?, e: DMLTestsData.E, en: DMLTestsData.E?, es: DMLTestsData.E, esn: DMLTestsData.E?, s: String, sn: String?, dc: BigDecimal, dcn: BigDecimal?) {
+    private fun DMLTestsData.Misc.checkRow(row: ResultRow, n: Int, nn: Int?, d: Date, dn: Date?, t: Date, tn: Date?, e: DMLTestsData.E, en: DMLTestsData.E?, es: DMLTestsData.E, esn: DMLTestsData.E?, s: String, sn: String?, dc: BigDecimal, dcn: BigDecimal?, fcn: Float?) {
         assertEquals(row[this.n], n)
         assertEquals(row[this.nn], nn)
         assertEqualDateTime(row[this.d], d)
@@ -1419,10 +1421,10 @@ class DMLTests : DatabaseTestsBase() {
     fun testDefaultExpressions02() {
         val foo = object : IntIdTable("foo") {
             val name = text("name")
-            val defaultDateTime = datetime("defaultDateTime").defaultExpression(CurrentDateTime())
+            val defaultDateTime = datetime<Date>("defaultDateTime").defaultExpression(DefaultDateSPI.CurrentDateTime())
         }
 
-        val nonDefaultDate = DateTime.parse("2000-01-01")
+        val nonDefaultDate = Date(2000,1,1)
 
         withTables(foo) {
             val id = foo.insertAndGetId {
