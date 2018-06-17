@@ -8,6 +8,7 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import java.time.temporal.TemporalAccessor
 import java.util.*
 
 
@@ -25,10 +26,9 @@ fun Table.date(name: String): Column<LocalDateTime> = registerColumn(name, JavaL
  */
 fun Table.datetime(name: String): Column<LocalDateTime> = registerColumn(name, JavaLocalDateColumnType(DateType.DATETIME))
 
-private val DEFAULT_DATE_STRING_FORMATTER = DateTimeFormatter.ofPattern("YYYY-MM-dd", Locale.ROOT)
-private val DEFAULT_DATE_TIME_STRING_FORMATTER = DateTimeFormatter.ofPattern("YYYY-MM-dd HH:mm:ss.SSSSSS", Locale.ROOT)
-private val SQLITE_DATE_TIME_STRING_FORMATTER = DateTimeFormatter.ofPattern("YYYY-MM-dd HH:mm:ss")
-private val SQLITE_DATE_STRING_FORMATTER = DateTimeFormatter.ISO_DATE
+private val DEFAULT_DATE_STRING_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ROOT)
+private val DEFAULT_DATE_TIME_STRING_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS", Locale.ROOT)
+private val SQLITE_DATE_TIME_STRING_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ROOT)
 
 class JavaLocalDateColumnType(type: DateType): DateColumnType(type) {
 
@@ -52,16 +52,15 @@ class JavaLocalDateColumnType(type: DateType): DateColumnType(type) {
 
     override fun valueFromDB(value: Any): Any = when(value) {
         is LocalDateTime -> value
+        is TemporalAccessor -> LocalDateTime.from(value)
         is java.sql.Date ->  value.time.millisToLocalDateTimeUTC()
         is java.sql.Timestamp -> value.time.millisToLocalDateTimeUTC()
         is Int -> value.toLong().millisToLocalDateTimeUTC()
         is Long -> value.millisToLocalDateTimeUTC()
-        is String -> when {
-            isSQLite && type == DateType.DATETIME -> SQLITE_DATE_TIME_STRING_FORMATTER.parse(value)
-            isSQLite -> SQLITE_DATE_STRING_FORMATTER.parse(value)
-            else -> value
+        else -> when {
+            isSQLite -> LocalDateTime.parse("$value", SQLITE_DATE_TIME_STRING_FORMATTER)
+            else -> LocalDateTime.parse("$value", DEFAULT_DATE_TIME_STRING_FORMATTER)
         }
-        else -> DEFAULT_DATE_TIME_STRING_FORMATTER.parse(value.toString())
     }
 
     override fun notNullValueToDB(value: Any): Any {

@@ -1,6 +1,8 @@
 package org.jetbrains.exposed.extensions.dataTypes.javaTime
 
 import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.DefaultDateSPI.columnType
+import org.jetbrains.exposed.sql.Function
 import org.jetbrains.exposed.sql.tests.DatabaseTestsBase
 import org.junit.Test
 import java.time.LocalDate
@@ -11,6 +13,9 @@ import kotlin.test.assertEquals
 object JavaTimeTable : Table() {
     val dateColumn = date("dateColumn")
     val timeColumn = datetime("timeColumn")
+    val defaultValueExp = object : Function<LocalDateTime>(columnType(DateType.DATETIME)) {
+        override fun toSQL(queryBuilder: QueryBuilder) = "'2018-01-02 00:00:00'"
+    }
     val dateWithDefault = date("dateDefault").defaultExpression(JavaDateTimeSPI.CurrentDateTime())
     val timeWithDefault = datetime("timeDefault").defaultExpression(JavaDateTimeSPI.CurrentDateTime())
 }
@@ -34,9 +39,11 @@ class JavaTimeMappingTest : DatabaseTestsBase() {
                 JavaTimeTable.dateColumn eq isoDate
             }.count())
 
-            assertEquals(1, JavaTimeTable.select {
-                JavaTimeTable.dateWithDefault eq JavaDateTimeSPI.Date(JavaDateTimeSPI.dateParam(LocalDateTime.now()))
-            }.count())
+            if (this.db.vendor != "sqlite") { // sqlite doesn't have date columns
+                assertEquals(1, JavaTimeTable.select {
+                    JavaTimeTable.dateWithDefault eq JavaDateTimeSPI.Date(JavaDateTimeSPI.dateParam(LocalDateTime.now()))
+                }.count())
+            }
         }
     }
 }
