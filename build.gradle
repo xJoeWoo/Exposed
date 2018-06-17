@@ -68,6 +68,11 @@ test {
         showStandardStreams = true
         exceptionFormat = 'full'
     }
+
+    copy {
+        from(rootProject.file("/src/test/resources").absolutePath)
+        into("out/test/resources")
+    }
 }
 
 bintray {
