@@ -170,9 +170,9 @@ open class Table(name: String = ""): ColumnSet(), DdlAware {
 
     override infix fun crossJoin(otherTable: ColumnSet) : Join = Join (this, otherTable, JoinType.CROSS)
 
-    fun <T> registerColumn(name: String, type: IColumnType): Column<T> = Column<T>(this, name, type).apply {
-        _columns.add(this)
-    }
+    fun <T> registerColumn(name: String, type: IColumnType) = Column<T>(this, name, type).also { _columns.add(it) }
+
+    fun <T:Column<*>> registerColumn(column: T) : T = column.also { _columns.add(it) }
 
     fun<TColumn: Column<*>> replaceColumn (oldColumn: Column<*>, newColumn: TColumn) : TColumn {
         _columns.remove(oldColumn)
@@ -326,7 +326,7 @@ open class Table(name: String = ""): ColumnSet(), DdlAware {
     private fun <T> Column<T>.cloneWithAutoInc(idSeqName: String?) : Column<T> = when(columnType) {
         is AutoIncColumnType -> this
         is ColumnType ->
-            this@cloneWithAutoInc.clone<Column<T>>(mapOf(Column<T>::columnType to AutoIncColumnType(columnType, idSeqName ?: "${tableName}_${name}_seq")))
+            this@cloneWithAutoInc.clone<Column<T>>(mapOf(Column<T>::columnType to AutoIncColumnType(columnType as ColumnType, idSeqName ?: "${tableName}_${name}_seq")))
         else -> error("Unsupported column type for auto-increment $columnType")
     }
 
@@ -377,7 +377,7 @@ open class Table(name: String = ""): ColumnSet(), DdlAware {
         return this
     }
 
-    fun <T:Any> Column<T>.defaultExpression(defaultValue: Expression<T>): Column<T> {
+    fun <T:Any, C: Column<T>, E:Expression<T>> C.defaultExpression(defaultValue: E): C {
         this.dbDefaultValue = defaultValue
         this.defaultValueFun = null
         return this

@@ -1,9 +1,7 @@
 package org.jetbrains.exposed.extensions.dataTypes.javaTime
 
-import org.jetbrains.exposed.sql.Column
-import org.jetbrains.exposed.sql.DateColumnType
-import org.jetbrains.exposed.sql.DateType
-import org.jetbrains.exposed.sql.Table
+import org.jetbrains.exposed.sql.*
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.ZoneOffset
@@ -17,20 +15,25 @@ import java.util.*
  *
  * @param name The column name
  */
-fun Table.date(name: String): Column<LocalDateTime> = registerColumn(name, JavaLocalDateColumnType(DateType.DATE))
+fun Table.date(name: String): DateColumn<LocalDate> = registerColumn(DateColumn(this, name, Java8ColumnType(DateType.DATE)))
 
 /**
  * A datetime column to store both a date and a time.
  *
  * @param name The column name
  */
-fun Table.datetime(name: String): Column<LocalDateTime> = registerColumn(name, JavaLocalDateColumnType(DateType.DATETIME))
+fun Table.datetime(name: String): DateColumn<LocalDateTime> = registerColumn(DateColumn(this, name, Java8ColumnType(DateType.DATETIME)))
+
+@JvmName("ExposedJava8AsDate")
+fun Expression<LocalDateTime>.asDate() = NoOpConversion<LocalDateTime, LocalDate>(this, Java8ColumnType(DateType.DATE))
+@JvmName("ExposedJava8AsDateNullable")
+fun Expression<LocalDateTime?>.asDate() = NoOpConversion<LocalDateTime?, LocalDate?>(this, Java8ColumnType(DateType.DATE))
 
 private val DEFAULT_DATE_STRING_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ROOT)
 private val DEFAULT_DATE_TIME_STRING_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS", Locale.ROOT)
 private val SQLITE_DATE_TIME_STRING_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ROOT)
 
-class JavaLocalDateColumnType(type: DateType): DateColumnType(type) {
+class Java8ColumnType(type: DateType): DateColumnType(type) {
 
     private fun Long.millisToLocalDateTimeUTC() = LocalDateTime.ofEpochSecond(this / 1000, (this % 1000).toInt(), ZoneOffset.UTC)
 
@@ -38,6 +41,7 @@ class JavaLocalDateColumnType(type: DateType): DateColumnType(type) {
         if (value is String) return value
 
         val dateTime = when (value) {
+            is LocalDate -> value.atStartOfDay()
             is LocalDateTime -> value
             is java.sql.Date -> value.time.millisToLocalDateTimeUTC()
             is java.sql.Timestamp -> value.time.millisToLocalDateTimeUTC()

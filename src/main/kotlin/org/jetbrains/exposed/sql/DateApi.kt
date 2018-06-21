@@ -9,35 +9,41 @@ enum class DateType {
     INSTANT, DATETIME, DATE, TIME
 }
 
+interface DateExpression<T>
+
+abstract class DateFunction<DATE>(columnType: IColumnType) : Function<DATE>(columnType), DateExpression<DATE>
+
+class DateColumn<T>(table: Table, name: String, columnType: IColumnType) : Column<T>(table, name, columnType), DateExpression<T>
+
 abstract class DateColumnType(val type: DateType): ColumnType() {
     override fun sqlType(): String  = currentDialect.dataTypeProvider.dateTimeType(type)
     protected val isSQLite: Boolean get() = currentDialect is SQLiteDialect
 }
 
-abstract class DateApi<T:Any> {
-    inner class Date(val expr: Expression<out T?>) : Function<T>(columnType(DateType.DATE)) {
+abstract class DateApi<DATE, INSTANT, DATETIME> {
+    inner class Date<D, T>(val expr: T) : DateFunction<DATE?>(columnType(DateType.DATE)) where T : DateExpression<D>, T : Expression<D> {
         override fun toSQL(queryBuilder: QueryBuilder): String
                 = currentDialect.functionProvider.cast(expr, columnType, queryBuilder)
     }
 
-    inner class CurrentDateTime : Function<T>(columnType(DateType.DATETIME)) {
+    inner class CurrentDateTime<D> : DateFunction<D>(columnType(DateType.DATETIME)) {
         override fun toSQL(queryBuilder: QueryBuilder) = "CURRENT_TIMESTAMP"
     }
 
-    inner class Month(val expr: Expression<out T?>) : Function<T>(columnType(DateType.DATE)) {
+    inner class Month<D, T>(val expr: T) : Function<Int>(columnType(DateType.DATE))  where T : DateExpression<D>, T : Expression<D>  {
         override fun toSQL(queryBuilder: QueryBuilder): String = "MONTH(${expr.toSQL(queryBuilder)})"
     }
 
     protected abstract fun columnType(type: DateType) : DateColumnType
 
-    fun dateParam(value: T): Expression<T> = QueryParameter(value, columnType(DateType.DATE))
-    fun dateTimeParam(value: T): Expression<T> = QueryParameter(value, columnType(DateType.DATETIME))
+    fun dateParam(value: DATE): Expression<DATE> = QueryParameter(value, columnType(DateType.DATE))
+    fun dateTimeParam(value: DATETIME): Expression<DATETIME> = QueryParameter(value, columnType(DateType.DATETIME))
 
-    fun dateLiteral(value: T) : LiteralOp<T> = LiteralOp(columnType(DateType.DATE), value)
-    fun dateTimeLiteral(value: T) : LiteralOp<T> = LiteralOp(columnType(DateType.DATETIME), value)
+    fun dateLiteral(value: DATE) : LiteralOp<DATE> = LiteralOp(columnType(DateType.DATE), value)
+    fun dateTimeLiteral(value: DATETIME) : LiteralOp<DATETIME> = LiteralOp(columnType(DateType.DATETIME), value)
 }
 
-object DefaultDateSPI : DateApi<java.util.Date>() {
+object DefaultDateSPI : DateApi<Date, Date, Date>() {
     public override fun columnType(type: DateType): DateColumnType = DefaultDateColumnType(type)
 
     private val DEFAULT_DATE_STRING_FORMATTER get() = SimpleDateFormat("YYYY-MM-dd", Locale.ROOT).apply { timeZone = TimeZone.getDefault() }

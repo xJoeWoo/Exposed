@@ -8,7 +8,7 @@ import org.jetbrains.exposed.sql.vendors.currentDialectIfAvailable
 
 private val comparator = compareBy<Column<*>>({ it.table.tableName }, { it.name })
 
-class Column<T>(val table: Table, val name: String, override val columnType: IColumnType) : ExpressionWithColumnType<T>(), DdlAware, Comparable<Column<*>> {
+open class Column<T>(val table: Table, val name: String, override val columnType: IColumnType) : ExpressionWithColumnType<T>(), DdlAware, Comparable<Column<*>> {
     var referee: Column<*>? = null
     internal var onDelete: ReferenceOption? = null
                 get() = field ?: currentDialectIfAvailable?.defaultReferenceOption

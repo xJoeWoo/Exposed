@@ -1,11 +1,12 @@
 package org.jetbrains.exposed.extensions.dataTypes.joda
 
-import org.jetbrains.exposed.sql.Column
+import org.jetbrains.exposed.sql.DateColumn
 import org.jetbrains.exposed.sql.DateColumnType
 import org.jetbrains.exposed.sql.DateType
 import org.jetbrains.exposed.sql.Table
 import org.joda.time.DateTime
 import org.joda.time.DateTimeZone
+import org.joda.time.LocalDate
 import org.joda.time.format.DateTimeFormat
 import org.joda.time.format.ISODateTimeFormat
 import java.util.*
@@ -15,15 +16,14 @@ import java.util.*
  *
  * @param name The column name
  */
-fun Table.date(name: String): Column<DateTime> = registerColumn(name, JodaDateColumnType(DateType.DATE))
+fun Table.date(name: String): DateColumn<LocalDate> = registerColumn(DateColumn(this, name, JodaDateColumnType(DateType.DATE)))
 
 /**
  * A datetime column to store both a date and a time.
  *
  * @param name The column name
  */
-fun Table.datetime(name: String): Column<DateTime> = registerColumn(name, JodaDateColumnType(DateType.DATETIME))
-
+fun Table.datetime(name: String): DateColumn<DateTime> = registerColumn(DateColumn(this, name, JodaDateColumnType(DateType.DATETIME)))
 
 private val DEFAULT_DATE_STRING_FORMATTER = DateTimeFormat.forPattern("YYYY-MM-dd").withLocale(Locale.ROOT)
 private val DEFAULT_DATE_TIME_STRING_FORMATTER = DateTimeFormat.forPattern("YYYY-MM-dd HH:mm:ss.SSSSSS").withLocale(Locale.ROOT)
