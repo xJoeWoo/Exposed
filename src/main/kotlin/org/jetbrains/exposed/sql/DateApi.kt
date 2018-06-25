@@ -1,17 +1,18 @@
 package org.jetbrains.exposed.sql
 
+import org.jetbrains.exposed.sql.DefaultDateSPI.columnType
 import org.jetbrains.exposed.sql.vendors.SQLiteDialect
 import org.jetbrains.exposed.sql.vendors.currentDialect
 import java.text.SimpleDateFormat
 import java.util.*
 
 enum class DateType {
-    INSTANT, DATETIME, DATE, TIME
+    INSTANT, DATETIME, DATE, LOCAL_DATETIME, TIME
 }
 
 interface DateExpression<T>
 
-abstract class DateFunction<DATE>(columnType: IColumnType) : Function<DATE>(columnType), DateExpression<DATE>
+abstract class DateFunction<DATE>(type: DateType) : Function<DATE>(columnType(type)), DateExpression<DATE>
 
 class DateColumn<T>(table: Table, name: String, columnType: IColumnType) : Column<T>(table, name, columnType), DateExpression<T>
 
@@ -20,30 +21,36 @@ abstract class DateColumnType(val type: DateType): ColumnType() {
     protected val isSQLite: Boolean get() = currentDialect is SQLiteDialect
 }
 
-abstract class DateApi<DATE, INSTANT, DATETIME> {
-    inner class Date<D, T>(val expr: T) : DateFunction<DATE?>(columnType(DateType.DATE)) where T : DateExpression<D>, T : Expression<D> {
+abstract class DateApi<LOCALDATE, LOCALDATETIME, DATETIME, INSTANT> {
+    inner class Date<D, T>(val expr: T) : DateFunction<LOCALDATE?>(DateType.DATE) where T : DateExpression<D>, T : Expression<D> {
         override fun toSQL(queryBuilder: QueryBuilder): String
                 = currentDialect.functionProvider.cast(expr, columnType, queryBuilder)
     }
 
-    inner class CurrentDateTime<D> : DateFunction<D>(columnType(DateType.DATETIME)) {
+    inner class CurrentDateTime<D> : DateFunction<D>(DateType.DATETIME) {
         override fun toSQL(queryBuilder: QueryBuilder) = "CURRENT_TIMESTAMP"
     }
 
-    inner class Month<D, T>(val expr: T) : Function<Int>(columnType(DateType.DATE))  where T : DateExpression<D>, T : Expression<D>  {
+    inner class Month<D, T>(val expr: T) : Function<Int>(columnType(DateType.DATE)) where T : DateExpression<D>, T : Expression<D>  {
         override fun toSQL(queryBuilder: QueryBuilder): String = "MONTH(${expr.toSQL(queryBuilder)})"
     }
 
     protected abstract fun columnType(type: DateType) : DateColumnType
 
-    fun dateParam(value: DATE): Expression<DATE> = QueryParameter(value, columnType(DateType.DATE))
-    fun dateTimeParam(value: DATETIME): Expression<DATETIME> = QueryParameter(value, columnType(DateType.DATETIME))
+    @Suppress("UNCHECKED_CAST")
+    fun dateParam(value: LOCALDATE) = object : DateFunction<LOCALDATE>(DateType.DATE) {
+        override fun toSQL(queryBuilder: QueryBuilder) = queryBuilder.registerArgument(columnType, value)
+    }
 
-    fun dateLiteral(value: DATE) : LiteralOp<DATE> = LiteralOp(columnType(DateType.DATE), value)
+    fun dateTimeParam(value: DATETIME) = object : DateFunction<DATETIME>(DateType.DATE) {
+        override fun toSQL(queryBuilder: QueryBuilder) = queryBuilder.registerArgument(columnType, value)
+    }
+
+    fun dateLiteral(value: LOCALDATE) : LiteralOp<LOCALDATE> = LiteralOp(columnType(DateType.DATE), value)
     fun dateTimeLiteral(value: DATETIME) : LiteralOp<DATETIME> = LiteralOp(columnType(DateType.DATETIME), value)
 }
 
-object DefaultDateSPI : DateApi<Date, Date, Date>() {
+object DefaultDateSPI : DateApi<Date, Date, Date, Date>() {
     public override fun columnType(type: DateType): DateColumnType = DefaultDateColumnType(type)
 
     private val DEFAULT_DATE_STRING_FORMATTER get() = SimpleDateFormat("YYYY-MM-dd", Locale.ROOT).apply { timeZone = TimeZone.getDefault() }

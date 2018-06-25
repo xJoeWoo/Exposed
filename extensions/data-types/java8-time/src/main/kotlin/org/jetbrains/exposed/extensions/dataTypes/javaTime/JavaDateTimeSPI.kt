@@ -5,7 +5,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 
-typealias JavaDateApi = DateApi<LocalDate, Instant, LocalDateTime>
+typealias JavaDateApi = DateApi<LocalDate, LocalDateTime, Instant, LocalDateTime>
 
 object JavaDateTimeSPI : JavaDateApi() {
     override fun columnType(type: DateType): DateColumnType = Java8ColumnType(type)

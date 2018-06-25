@@ -3,9 +3,10 @@ package org.jetbrains.exposed.extensions.dataTypes.joda
 import org.jetbrains.exposed.sql.*
 import org.joda.time.DateTime
 import org.joda.time.LocalDate
+import org.joda.time.LocalDateTime
 import java.time.Instant
 
-typealias JodaDateApi = DateApi<LocalDate, Instant, DateTime>
+typealias JodaDateApi = DateApi<LocalDate, LocalDateTime, Instant, DateTime>
 
 object JodaDateSPI : JodaDateApi() {
     override fun columnType(type: DateType): DateColumnType = JodaDateColumnType(type)

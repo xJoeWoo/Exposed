@@ -13,7 +13,7 @@ import kotlin.test.assertEquals
 object JavaTimeTable : Table() {
     val dateColumn = date("dateColumn")
     val timeColumn = datetime("timeColumn")
-    val defaultValueExp = object : DateFunction<LocalDateTime>(columnType(DateType.DATETIME)) {
+    val defaultValueExp = object : DateFunction<LocalDateTime>(DateType.DATETIME) {
         override fun toSQL(queryBuilder: QueryBuilder) = "'2018-01-02 00:00:00'"
     }
     val dateWithDefault = date("dateDefault").defaultExpression(JavaDateTimeSPI.CurrentDateTime())
@@ -39,7 +39,7 @@ class JavaTimeMappingTest : DatabaseTestsBase() {
                 assertEquals(1, JavaTimeTable.select {
                     JavaTimeTable.dateColumn.date() eq JavaDateTimeSPI.Date(JavaTimeTable.timeColumn)
                 }.count())
-                
+
                 assertEquals(1, JavaTimeTable.select {
                     JavaDateTimeSPI.Date(JavaTimeTable.dateWithDefault)
                             JavaTimeTable.dateWithDefault eq JavaDateTimeSPI.Date(JavaDateTimeSPI.dateParam(LocalDate.now()))
