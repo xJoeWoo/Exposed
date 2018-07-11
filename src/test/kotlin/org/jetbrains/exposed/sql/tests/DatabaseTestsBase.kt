@@ -147,4 +147,4 @@ inline fun <reified DATE> Table.datetime(name: String) = when {
 inline fun <reified DATE:Any> dateProvider() = when {
     DATE::class == Date::class -> DefaultDateSPI
     else -> error("")
-} as DateApi<DATE>
+} as DateApi<DATE, DATE, DATE, DATE>

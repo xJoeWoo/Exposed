@@ -35,7 +35,7 @@ abstract class DateApi<LOCALDATE, LOCALDATETIME, DATETIME, INSTANT> {
         override fun toSQL(queryBuilder: QueryBuilder): String = "MONTH(${expr.toSQL(queryBuilder)})"
     }
 
-    protected abstract fun columnType(type: DateType) : DateColumnType
+    abstract fun columnType(type: DateType) : DateColumnType
 
     @Suppress("UNCHECKED_CAST")
     fun dateParam(value: LOCALDATE) = object : DateFunction<LOCALDATE>(DateType.DATE) {

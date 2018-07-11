@@ -16,7 +16,15 @@ import java.util.*
  *
  * @param name The column name
  */
-fun Table.date(name: String): DateColumn<LocalDate> = registerColumn(DateColumn(this, name, JodaDateColumnType(DateType.DATE)))
+@Deprecated("Will be removed on next releases, Please replace with `localdate`", ReplaceWith("localdate"))
+fun Table.date(name: String): DateColumn<DateTime> = registerColumn(DateColumn(this, name, JodaDateColumnType(DateType.DATE)))
+
+/**
+ * A localdate column to store a date.
+ *
+ * @param name The column name
+ */
+fun Table.localdate(name: String): DateColumn<LocalDate> = registerColumn(DateColumn(this, name, JodaDateColumnType(DateType.DATE)))
 
 /**
  * A datetime column to store both a date and a time.

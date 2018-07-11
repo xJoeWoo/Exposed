@@ -193,7 +193,7 @@ class DDLTests : DatabaseTestsBase() {
     }
 
     @Test fun testDefaults01() {
-        val currentDT = dateProvider<Date>().CurrentDateTime()
+        val currentDT = dateProvider<Date>().CurrentDateTime<Date>()
         val nowExpression = object : Expression<Date>() {
             override fun toSQL(queryBuilder: QueryBuilder) = when (currentDialect) {
                 is OracleDialect -> "SYSDATE"

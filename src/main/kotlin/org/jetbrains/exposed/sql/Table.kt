@@ -401,7 +401,7 @@ open class Table(name: String = ""): ColumnSet(), DdlAware {
         indices.add(Index(columns.toList(), isUnique, customIndexName))
     }
 
-    fun<T> Column<T>.index(customIndexName:String? = null, isUnique: Boolean = false) : Column<T> = apply {
+    fun<T, C:Column<T>> C.index(customIndexName:String? = null, isUnique: Boolean = false) : C = apply {
         table.index(customIndexName, isUnique, this)
     }
 

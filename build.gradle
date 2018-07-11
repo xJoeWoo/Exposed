@@ -10,6 +10,9 @@ buildscript {
         maven {
             url "http://dl.bintray.com/kotlin/kotlin"
         }
+        maven {
+            url "http://dl.bintray.com/kotlin/kotlin-eap"
+        }
     }
     dependencies {
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
@@ -117,6 +120,9 @@ allprojects {
 
         maven {
             url "https://packages.atlassian.com/maven-3rdparty-legacy/"
+        }
+        maven {
+            url "http://dl.bintray.com/kotlin/kotlin-eap"
         }
     }
 

@@ -1,7 +1,9 @@
 package org.jetbrains.exposed.sql.tests.shared
 
+import demo.dao.User
 import org.hamcrest.Matchers.containsInAnyOrder
 import org.hamcrest.Matchers.not
+import org.jetbrains.exposed.dao.IdTable
 import org.jetbrains.exposed.dao.IntIdTable
 import org.jetbrains.exposed.exceptions.UnsupportedByDialectException
 import org.jetbrains.exposed.sql.*
