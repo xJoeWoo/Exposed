@@ -11,12 +11,12 @@ import java.time.format.DateTimeFormatter
 import kotlin.test.assertEquals
 
 object JavaTimeTable : Table() {
-    val dateColumn = date("dateColumn")
+    val dateColumn = date("dateColumn").nullable()
     val timeColumn = datetime("timeColumn")
     val defaultValueExp = object : DateFunction<LocalDateTime>(DateType.DATETIME) {
         override fun toSQL(queryBuilder: QueryBuilder) = "'2018-01-02 00:00:00'"
     }
-    val dateWithDefault = date("dateDefault").defaultExpression(JavaDateTimeSPI.CurrentDateTime())
+    val dateWithDefault = date("dateDefault")
     val timeWithDefault = datetime("timeDefault").defaultExpression(JavaDateTimeSPI.CurrentDateTime())
 }
 

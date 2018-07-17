@@ -27,7 +27,7 @@ abstract class DateApi<LOCALDATE, LOCALDATETIME, DATETIME, INSTANT> {
                 = currentDialect.functionProvider.cast(expr, columnType, queryBuilder)
     }
 
-    inner class CurrentDateTime<D> : DateFunction<D>(DateType.DATETIME) {
+    inner class CurrentDateTime : DateFunction<DATETIME>(DateType.DATETIME) {
         override fun toSQL(queryBuilder: QueryBuilder) = "CURRENT_TIMESTAMP"
     }
 

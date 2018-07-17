@@ -361,8 +361,8 @@ open class Table(name: String = ""): ColumnSet(), DdlAware {
                                        onDelete: ReferenceOption? = null, onUpdate: ReferenceOption? = null): Column<EntityID<T>?> =
             entityId(name, foreign).references(foreign.id, onDelete, onUpdate).nullable()
 
-    fun <T:Any> Column<T>.nullable(): Column<T?> {
-        val newColumn = Column<T?> (table, name, columnType)
+    private fun <T:Any, C:Column<T?>> Column<T>.nullable(newColumnFun: () -> C) : C {
+        val newColumn = newColumnFun()
         newColumn.referee = referee
         newColumn.onUpdate = onUpdate.takeIf { it != currentDialectIfAvailable?.defaultReferenceOption }
         newColumn.onDelete = onDelete.takeIf { it != currentDialectIfAvailable?.defaultReferenceOption }
@@ -372,6 +372,9 @@ open class Table(name: String = ""): ColumnSet(), DdlAware {
         newColumn.columnType.nullable = true
         return replaceColumn (this, newColumn)
     }
+
+    fun <T:Any> Column<T>.nullable(): Column<T?> = nullable { Column (table, name, columnType) }
+    fun <T:Any> DateColumn<T>.nullable() : DateColumn<T?> = nullable { DateColumn(table, name, columnType) }
 
     fun <T:Any> Column<T>.default(defaultValue: T): Column<T> {
         this.dbDefaultValue = SqlExpressionBuilder.run {
