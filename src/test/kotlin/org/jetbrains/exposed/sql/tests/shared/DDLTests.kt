@@ -8,6 +8,7 @@ import org.jetbrains.exposed.sql.vendors.*
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.postgresql.util.PGobject
+import java.lang.Exception
 import java.sql.SQLException
 import java.util.*
 import javax.sql.rowset.serial.SerialBlob
@@ -191,7 +192,7 @@ class DDLTests : DatabaseTestsBase() {
     }
 
     @Test fun tableWithMultiPKandAutoIncrement() {
-        val Foo = object : IdTable<Long>() {
+        val Foo = object : IdTable<Long>("FooTable") {
             val bar = integer("bar").primaryKey()
             override val id: Column<EntityID<Long>> = long("id").entityId().autoIncrement().primaryKey()
         }
