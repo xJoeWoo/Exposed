@@ -1109,7 +1109,9 @@ class DMLTests : DatabaseTestsBase() {
             val id = LongIdTable.insert {
                 it[LongIdTable.name] = "Foo"
             } get LongIdTable.id
-            assertEquals(LongIdTable.selectAll().last()[LongIdTable.id], id)
+            val row = LongIdTable.selectAll().last()
+            assertEquals(row[LongIdTable.id], id)
+            assertEquals(row[LongIdTable.name], "Foo")
         }
     }
 
@@ -1340,6 +1342,10 @@ class DMLTests : DatabaseTestsBase() {
 
             assert(resultRow[users.name] == "Alex")
             assert(resultRow[usersAlias[users.name]] == "Something")
+
+            cities.select {
+                intLiteral(1) eq intLiteral(1)
+            }
         }
     }
 

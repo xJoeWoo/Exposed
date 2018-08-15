@@ -3,12 +3,17 @@ package org.jetbrains.exposed.sql.tests.shared
 import org.jetbrains.exposed.dao.*
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.tests.DatabaseTestsBase
+import org.jetbrains.exposed.sql.transactions.TransactionManager
+import org.jetbrains.exposed.sql.transactions.transaction
+import org.junit.Before
 import org.junit.Test
+import java.sql.Connection
 import java.util.*
 
 object ViaTestData {
     object NumbersTable: UUIDTable() {
         val number = integer("number")
+        val notNull = bool("notNull").default(false).nullable()
     }
 
     object StringsTable: IdTable<Long>("") {
@@ -30,6 +35,7 @@ object ViaTestData {
 
 class VNumber(id: EntityID<UUID>): UUIDEntity(id) {
     var number by ViaTestData.NumbersTable.number
+    var notNull by ViaTestData.NumbersTable.notNull
     var connectedStrings: SizedIterable<VString> by VString via ViaTestData.ConnectionTable
 
     companion object : UUIDEntityClass<VNumber>(ViaTestData.NumbersTable)
@@ -44,24 +50,29 @@ class VString(id: EntityID<Long>): Entity<Long>(id) {
 class ViaTests : DatabaseTestsBase() {
     @Test fun testConnection01() {
         withTables(*ViaTestData.allTables) {
-            val n = VNumber.new { number = 10 }
+            val n = VNumber.new {
+                number = 10
+            }
             val s = VString.new { text = "aaa" }
             n.connectedStrings = SizedCollection(listOf(s))
 
             val row = ViaTestData.ConnectionTable.selectAll().single()
-            assertEquals (n.id, row[ViaTestData.ConnectionTable.numId])
+            val row2 = ViaTestData.NumbersTable.selectAll().single()
+            assertEquals (false, row2[ViaTestData.NumbersTable.notNull])
             assertEquals (s.id, row[ViaTestData.ConnectionTable.stringId])
         }
     }
 
     @Test fun testConnection02() {
         withTables(*ViaTestData.allTables) {
-            val n1 = VNumber.new { number = 1 }
-            val n2 = VNumber.new { number = 2 }
+
             val s1 = VString.new { text = "aaa" }
             val s2 = VString.new { text = "bbb" }
-
-            n1.connectedStrings = SizedCollection(listOf(s1, s2))
+            val n1 = VNumber.new {
+                number = 1
+                connectedStrings = SizedCollection(listOf(s1, s2))
+            }
+            val n2 = VNumber.new { number = 2 }
 
             val row = ViaTestData.ConnectionTable.selectAll().toList()
             assertEquals(2, row.count())
@@ -79,7 +90,6 @@ class ViaTests : DatabaseTestsBase() {
             val s2 = VString.new { text = "bbb" }
 
             n1.connectedStrings = SizedCollection(listOf(s1, s2))
-            n2.connectedStrings = SizedCollection(listOf(s1, s2))
 
             run {
                 val row = ViaTestData.ConnectionTable.selectAll().toList()

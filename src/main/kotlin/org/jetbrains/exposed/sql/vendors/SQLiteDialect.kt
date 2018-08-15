@@ -4,8 +4,8 @@ import org.jetbrains.exposed.exceptions.throwUnsupportedException
 import org.jetbrains.exposed.sql.*
 
 internal object SQLiteDataTypeProvider : DataTypeProvider() {
-    override fun shortAutoincType(): String = "INTEGER AUTOINCREMENT"
-    override fun longAutoincType(): String = "INTEGER AUTOINCREMENT"
+    override fun shortAutoincType(): String = "INTEGER AUTO_INCREMENT"
+    override fun longAutoincType(): String = "INTEGER AUTO_INCREMENT"
     override fun floatType(): String = "SINGLE"
     override fun booleanToStatementString(bool: Boolean) = if (bool) "1" else "0"
     override fun dateTimeType(type: DateType): String  = "NUMERIC"

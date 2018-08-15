@@ -7,7 +7,6 @@ import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.TransactionManager
 import java.sql.Wrapper
 import java.text.SimpleDateFormat
-import java.util.*
 
 internal object H2DataTypeProvider : DataTypeProvider() {
     override fun uuidType(): String = "UUID"
@@ -19,13 +18,12 @@ internal object H2FunctionProvider : FunctionProvider() {
             ((TransactionManager.current().connection as Wrapper).unwrap(JdbcConnection::class.java).session as? Session)?.database?.mode?.name ?: ""
 
     private val isMySQLMode: Boolean get() = currentMode() == "MySQL"
+    private val threadLocalDateFormat = ThreadLocal.withInitial { SimpleDateFormat("yyyy-MM-dd") }
+    private val RELEASE_DATE_1_4_197 = threadLocalDateFormat.get().parse("2018-03-18").time
 
-    private val dateFormat = SimpleDateFormat("YYYY-MM-dd")
-    private val RELEASE_DATE_1_4_197 = dateFormat.parse("2018-03-18")
-            
-    private fun dbReleaseDate(transaction: Transaction) : Date {
+    private fun dbReleaseDate(transaction: Transaction) : Long {
         val releaseDate = transaction.db.metadata.databaseProductVersion.substringAfterLast('(').substringBeforeLast(')')
-        return dateFormat.parse(releaseDate)
+        return threadLocalDateFormat.get().parse(releaseDate).time
     }
 
     override fun replace(table: Table, data: List<Pair<Column<*>, Any?>>, transaction: Transaction): String {

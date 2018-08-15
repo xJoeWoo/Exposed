@@ -46,8 +46,7 @@ class InListOrNotInListOp<T>(val expr: ExpressionWithColumnType<T>, val list: It
     override fun toSQL(queryBuilder: QueryBuilder): String = buildString {
         list.iterator().let { i ->
             if (!i.hasNext()) {
-                val expr = Op.build { booleanLiteral(!isInList) eq booleanLiteral(true) }
-                append(expr.toSQL(queryBuilder))
+                append(Op.FALSE.toSQL(queryBuilder))
             } else {
                 val first = i.next()
                 if (!i.hasNext()) {
