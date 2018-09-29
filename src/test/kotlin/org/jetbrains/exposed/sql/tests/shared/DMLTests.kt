@@ -1,6 +1,5 @@
 package org.jetbrains.exposed.sql.tests.shared
 
-import demo.dao.User
 import org.hamcrest.Matchers.containsInAnyOrder
 import org.hamcrest.Matchers.not
 import org.jetbrains.exposed.dao.*
@@ -16,7 +15,6 @@ import org.jetbrains.exposed.sql.vendors.OracleDialect
 import org.jetbrains.exposed.sql.vendors.PostgreSQLDialect
 import org.jetbrains.exposed.sql.vendors.SQLServerDialect
 import org.jetbrains.exposed.sql.vendors.currentDialect
-import org.joda.time.DateTime
 import org.junit.Assert.assertThat
 import org.junit.Test
 import java.math.BigDecimal
@@ -560,13 +558,13 @@ class DMLTests : DatabaseTestsBase() {
 
             users.slice(maxNullableCityId).selectAll()
                 .map { it[maxNullableCityId] }.let { result ->
-                assertTrue(result.size == 1)
+                assertEquals(result.size, 1)
                 assertNotNull(result.single())
             }
 
             users.slice(maxNullableCityId).select { users.cityId.isNull() }
                 .map { it[maxNullableCityId] }.let { result ->
-                assertTrue(result.size == 1)
+                assertEquals(result.size, 1)
                 assertNull(result.single())
             }
         }
@@ -579,13 +577,13 @@ class DMLTests : DatabaseTestsBase() {
 
             cities.slice(maxNullableId).selectAll()
                 .map { it[maxNullableId] }.let { result ->
-                assertTrue(result.size == 1)
+                assertEquals(result.size, 1)
                 assertNotNull(result.single())
             }
 
             cities.slice(maxNullableId).select { cities.id.isNull() }
                 .map { it[maxNullableId] }.let { result: List<Int?> ->
-                assertTrue(result.size == 1)
+                assertEquals(result.size, 1)
                 assertNull(result.single())
             }
         }
@@ -599,13 +597,13 @@ class DMLTests : DatabaseTestsBase() {
 
             cities.slice(avgIdExpr).selectAll()
                 .map { it[avgIdExpr] }.let { result ->
-                assertTrue(result.size == 1)
-                assertTrue(result.single()!!.compareTo(avgId) == 0)
+                assertEquals(result.size, 1)
+                assertEquals(result.single()!!.compareTo(avgId), 0)
             }
 
             cities.slice(avgIdExpr).select { cities.id.isNull() }
                 .map { it[avgIdExpr] }.let { result ->
-                assertTrue(result.size == 1)
+                assertEquals(result.size, 1)
                 assertNull(result.single())
             }
         }
@@ -899,8 +897,8 @@ class DMLTests : DatabaseTestsBase() {
         }
     }
 
-    private fun DMLTestsData.Misc.checkRow(row: ResultRow, n: Int, nn: Int?, d: DateTime, dn: DateTime?,
-                                           t: DateTime, tn: DateTime?, e: DMLTestsData.E, en: DMLTestsData.E?,
+    private fun DMLTestsData.Misc.checkRow(row: ResultRow, n: Int, nn: Int?, d: Date, dn: Date?,
+                                           t: Date, tn: Date?, e: DMLTestsData.E, en: DMLTestsData.E?,
                                            es: DMLTestsData.E, esn: DMLTestsData.E?, s: String, sn: String?,
                                            dc: BigDecimal, dcn: BigDecimal?, fcn: Float?, dblcn: Double?) {
         assertEquals(row[this.n], n)
@@ -1256,11 +1254,11 @@ class DMLTests : DatabaseTestsBase() {
 
             tbl.checkRow(tbl.select { tbl.d.eq(date) }.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null, null)
             tbl.checkRow(tbl.select { tbl.dn.isNull() }.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null, null)
-            tbl.checkRow(tbl.select { tbl.dn.eq(null as DateTime?) }.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null, null)
+            tbl.checkRow(tbl.select { tbl.dn.eq(null as Date?) }.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null, null)
 
             tbl.checkRow(tbl.select { tbl.t.eq(time) }.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null, null)
             tbl.checkRow(tbl.select { tbl.tn.isNull() }.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null, null)
-            tbl.checkRow(tbl.select { tbl.tn.eq(null as DateTime?) }.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null, null)
+            tbl.checkRow(tbl.select { tbl.tn.eq(null as Date?) }.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null, null)
 
             tbl.checkRow(tbl.select { tbl.e.eq(DMLTestsData.E.ONE) }.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null, null)
             tbl.checkRow(tbl.select { tbl.en.isNull() }.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null, null)

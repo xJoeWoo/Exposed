@@ -3,10 +3,7 @@ package org.jetbrains.exposed.sql
 import org.jetbrains.exposed.dao.EntityID
 import org.jetbrains.exposed.dao.IdTable
 import org.jetbrains.exposed.sql.transactions.TransactionManager
-import org.jetbrains.exposed.sql.vendors.OracleDialect
-import org.jetbrains.exposed.sql.vendors.currentDialect
-import org.jetbrains.exposed.sql.vendors.currentDialectIfAvailable
-import org.jetbrains.exposed.sql.vendors.inProperCase
+import org.jetbrains.exposed.sql.vendors.*
 import java.math.BigDecimal
 import java.sql.Blob
 import java.util.*
@@ -387,7 +384,7 @@ open class Table(name: String = ""): ColumnSet(), DdlAware {
          Column<T>(this, name, refColumn.columnType.cloneAsBaseType()).references(refColumn, onDelete, onUpdate).nullable()
 
     private fun <T:Any, C:Column<T?>> Column<T>.nullable(newColumnFun: () -> C) : C {
-        val newColumn = Column<T?> (table, name, columnType)
+        val newColumn = newColumnFun()
         newColumn.referee = referee
         newColumn.onUpdate = onUpdate.takeIf { it != currentDialectIfAvailable?.defaultReferenceOption }
         newColumn.onDelete = onDelete.takeIf { it != currentDialectIfAvailable?.defaultReferenceOption }

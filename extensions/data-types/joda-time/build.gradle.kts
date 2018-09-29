@@ -8,19 +8,8 @@ group = "org.jetbrains.exposed.extensions"
 
 version = exposed_version!!
 
-buildscript {
-
-    repositories {
-        mavenCentral()
-        maven(url = "http://dl.bintray.com/kotlin/kotlin-eap")
-    }
-
-    val kotlin_version : String by rootProject.extra
-
-    dependencies {
-        classpath(module("org.jetbrains.kotlin", "kotlin-gradle-plugin", "$kotlin_version"))
-    }
-    
+plugins {
+    kotlin("jvm")
 }
 
 apply {

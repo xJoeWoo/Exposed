@@ -11,7 +11,7 @@ buildscript {
 
     repositories {
         mavenCentral()
-        maven(url = "http://dl.bintray.com/kotlin/kotlin-eap")
+        jcenter()
     }
 
     val kotlin_version : String by rootProject.extra
