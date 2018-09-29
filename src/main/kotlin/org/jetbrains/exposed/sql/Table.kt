@@ -10,6 +10,7 @@ import org.jetbrains.exposed.sql.vendors.inProperCase
 import java.math.BigDecimal
 import java.sql.Blob
 import java.util.*
+import kotlin.reflect.KClass
 import kotlin.reflect.KMutableProperty1
 import kotlin.reflect.KProperty1
 import kotlin.reflect.full.memberProperties
@@ -117,7 +118,11 @@ class Join (val table: ColumnSet) : ColumnSet() {
     override fun describe(s: Transaction): String = buildString {
         append(table.describe(s))
         for (p in joinParts) {
-            append(" ${p.joinType} JOIN ${p.joinPart.describe(s)}")
+            append(" ${p.joinType} JOIN ")
+            val isJoin = p.joinPart is Join
+            if (isJoin) append("(")
+            append(p.joinPart.describe(s))
+            if(isJoin) append(")")
             if (p.joinType != JoinType.CROSS) {
                 append(" ON ")
                 val queryBuilder = QueryBuilder(false)
@@ -187,18 +192,20 @@ open class Table(name: String = ""): ColumnSet(), DdlAware {
     }
 
     @Suppress("UNCHECKED_CAST")
-    fun <T:Comparable<T>> Column<T>.entityId(): Column<EntityID<T>> = replaceColumn(this, Column<EntityID<T>>(table, name, EntityIDColumnType(this)).apply {
-        this.indexInPK = this@entityId.indexInPK
-        this.defaultValueFun = this@entityId.defaultValueFun?.let { { EntityID(it(), table as IdTable<T>) } }
+    fun <T:Comparable<T>> Column<T>.entityId(): Column<EntityID<T>> = replaceColumn(this, Column<EntityID<T>>(table, name, EntityIDColumnType(this)).also {
+        it.indexInPK = this.indexInPK
+        it.defaultValueFun = defaultValueFun?.let { { EntityID(it(), table as IdTable<T>) } }
     })
 
     fun <ID:Comparable<ID>> entityId(name: String, table: IdTable<ID>) : Column<EntityID<ID>> {
         val originalColumn = (table.id.columnType as EntityIDColumnType<*>).idColumn
-        val columnTypeCopy = originalColumn.columnType.let { (it as? AutoIncColumnType)?.delegate ?: it }.clone()
+        val columnTypeCopy = originalColumn.columnType.cloneAsBaseType()
         val answer = Column<EntityID<ID>>(this, name, EntityIDColumnType(Column<ID>(table, name, columnTypeCopy)))
         _columns.add(answer)
         return answer
     }
+
+    private fun IColumnType.cloneAsBaseType() : IColumnType = ((this as? AutoIncColumnType)?.delegate ?: this).clone()
 
     private fun <T:Any> T.clone(replaceArgs: Map<KProperty1<T,*>, Any> = emptyMap()) = javaClass.kotlin.run {
         val consParams = primaryConstructor!!.parameters
@@ -208,14 +215,18 @@ open class Table(name: String = ""): ColumnSet(), DdlAware {
         primaryConstructor!!.callBy(consParams.associate { it to allParams[it.name] })
     }
 
+    @Deprecated("Use enumeration(name, klass) with KClass instead. Will be removed in next release.", ReplaceWith("enumeration(name, klass.kotlin)"))
+    fun <T:Enum<T>> enumeration(name: String, klass: Class<T>): Column<T> = registerColumn(name, EnumerationColumnType(klass))
     /**
      * An enumeration column where enumerations are stored by their ordinal integer.
      *
      * @param name The column name
      * @param klass The enum class
      */
-    fun <T:Enum<T>> enumeration(name: String, klass: Class<T>): Column<T> = registerColumn(name, EnumerationColumnType(klass))
+    fun <T:Enum<T>> enumeration(name: String, klass: KClass<T>): Column<T> = registerColumn(name, EnumerationColumnType(klass.java))
 
+    @Deprecated("Use enumerationByName(name, length, klass) with KClass instead. Will be removed in next release.", ReplaceWith("enumerationByName(name, length, klass.kotlin)"))
+    fun <T:Enum<T>> enumerationByName(name: String, length: Int, klass: Class<T>): Column<T> = registerColumn(name, EnumerationNameColumnType(klass, length))
     /**
      * An enumeration column where enumerations are stored by their name.
      *
@@ -223,7 +234,7 @@ open class Table(name: String = ""): ColumnSet(), DdlAware {
      * @param length The maximum length of the enumeration name
      * @param klass The enum class
      */
-    fun <T:Enum<T>> enumerationByName(name: String, length: Int, klass: Class<T>): Column<T> = registerColumn(name, EnumerationNameColumnType(klass, length))
+    fun <T:Enum<T>> enumerationByName(name: String, length: Int, klass: KClass<T>): Column<T> = registerColumn(name, EnumerationNameColumnType(klass.java, length))
 
     fun <T:Enum<T>> customEnumeration(name: String, sql: String? = null, fromDb: (Any) -> T, toDb: (T) -> Any) =
         registerColumn<T>(name, object : ColumnType() {
@@ -267,6 +278,14 @@ open class Table(name: String = ""): ColumnSet(), DdlAware {
      *
      */
     fun float(name: String): Column<Float> = registerColumn(name, FloatColumnType())
+
+    /**
+     * A double column to store a double precision number
+     *
+     * @see decimal for more details
+     *
+     */
+    fun double(name: String): Column<Double> = registerColumn(name, DoubleColumnType())
 
     /**
      * A long column to store a large (long) number.
@@ -339,20 +358,22 @@ open class Table(name: String = ""): ColumnSet(), DdlAware {
         replaceColumn(this@autoinc, this)
     }
 
-    fun <T, S: T, C:Column<S>> C.references(ref: Column<T>, onDelete: ReferenceOption? = null, onUpdate: ReferenceOption? = null): C = apply {
+    fun <T:Comparable<T>, S: T, C:Column<S>> C.references(ref: Column<T>, onDelete: ReferenceOption? = null, onUpdate: ReferenceOption? = null): C = apply {
         referee = ref
         this.onUpdate = onUpdate
         this.onDelete = onDelete
     }
 
-    infix fun <T, S: T, C:Column<S>> C.references(ref: Column<T>): C = references(ref, null, null)
+    infix fun <T:Comparable<T>, S: T, C:Column<S>> C.references(ref: Column<T>): C = references(ref, null, null)
 
     fun <T:Comparable<T>> reference(name: String, foreign: IdTable<T>,
                                     onDelete: ReferenceOption? = null, onUpdate: ReferenceOption? = null): Column<EntityID<T>> =
             entityId(name, foreign).references(foreign.id, onDelete, onUpdate)
 
-    fun<T> Table.reference(name: String, pkColumn: Column<T>): Column<T> {
-        val column = Column<T>(this, name, pkColumn.columnType) references pkColumn
+    fun <T:Comparable<T>> reference(name: String, refColumn: Column<T>,
+                                    onDelete: ReferenceOption? = null, onUpdate: ReferenceOption? = null): Column<T> {
+        val originalType = (refColumn.columnType as? EntityIDColumnType<*>)?.idColumn?.columnType ?: refColumn.columnType
+        val column = Column<T>(this, name, originalType.cloneAsBaseType()).references(refColumn, onDelete, onUpdate)
         this._columns.add(column)
         return column
     }
@@ -361,8 +382,12 @@ open class Table(name: String = ""): ColumnSet(), DdlAware {
                                        onDelete: ReferenceOption? = null, onUpdate: ReferenceOption? = null): Column<EntityID<T>?> =
             entityId(name, foreign).references(foreign.id, onDelete, onUpdate).nullable()
 
+    fun <T:Comparable<T?>> optReference(name: String, refColumn: Column<T>,
+                                    onDelete: ReferenceOption? = null, onUpdate: ReferenceOption? = null): Column<T?> =
+         Column<T>(this, name, refColumn.columnType.cloneAsBaseType()).references(refColumn, onDelete, onUpdate).nullable()
+
     private fun <T:Any, C:Column<T?>> Column<T>.nullable(newColumnFun: () -> C) : C {
-        val newColumn = newColumnFun()
+        val newColumn = Column<T?> (table, name, columnType)
         newColumn.referee = referee
         newColumn.onUpdate = onUpdate.takeIf { it != currentDialectIfAvailable?.defaultReferenceOption }
         newColumn.onDelete = onDelete.takeIf { it != currentDialectIfAvailable?.defaultReferenceOption }
@@ -448,6 +473,8 @@ open class Table(name: String = ""): ColumnSet(), DdlAware {
             Seq(it).createStatement()
         }.orEmpty()
 
+        val addForeignKeysInAlterPart = SchemaUtils.checkCycle(this) && currentDialect !is SQLiteDialect
+
         val createTableDDL = buildString {
             append("CREATE TABLE ")
             if (currentDialect.supportsIfNotExists) {
@@ -461,24 +488,31 @@ open class Table(name: String = ""): ColumnSet(), DdlAware {
                         append(", $it")
                     }
                 }
-                columns.filter { it.referee != null }.let { references ->
-                    if (references.isNotEmpty()) {
-                        append(references.joinToString(prefix = ", ", separator = ", ") { ForeignKeyConstraint.from(it).foreignKeyPart })
+
+                if (!addForeignKeysInAlterPart) {
+                    columns.filter { it.referee != null }.takeIf { it.isNotEmpty() }?.let { references ->
+                        references.joinTo(this, prefix = ", ", separator = ", ") { ForeignKeyConstraint.from(it).foreignKeyPart }
                     }
                 }
+
                 if (checkConstraints.isNotEmpty()) {
-                    append(
-                        checkConstraints.mapIndexed { index, (name, op) ->
-                            val resolvedName = name.takeIf { it.isNotBlank() } ?: "check_${tableName}_$index"
-                            CheckConstraint.from(this@Table, resolvedName, op).checkPart
-                        }.joinToString(prefix = ",", separator = ",")
-                    )
+                    checkConstraints.asSequence().mapIndexed { index, (name, op) ->
+                        val resolvedName = name.takeIf { it.isNotBlank() } ?: "check_${tableName}_$index"
+                        CheckConstraint.from(this@Table, resolvedName, op).checkPart
+                    }.joinTo(this, prefix = ",", separator = ",")
                 }
 
                 append(")")
             }
         }
-        return seqDDL + createTableDDL
+
+        val constraintSQL = if (addForeignKeysInAlterPart) {
+            columns.filter { it.referee != null }.flatMap {
+                ForeignKeyConstraint.from(it).createStatement()
+            }
+        } else emptyList()
+
+        return seqDDL + createTableDDL + constraintSQL
     }
 
     internal fun primaryKeyConstraint(): String? {
@@ -501,11 +535,15 @@ open class Table(name: String = ""): ColumnSet(), DdlAware {
         val dropTableDDL = buildString {
             append("DROP TABLE ")
             if (currentDialect.supportsIfNotExists) {
-                append(" IF EXISTS ")
+                append("IF EXISTS ")
             }
             append(TransactionManager.current().identity(this@Table))
             if (currentDialectIfAvailable is OracleDialect) {
                 append(" CASCADE CONSTRAINTS")
+            }
+
+            if (currentDialectIfAvailable is PostgreSQLDialect && SchemaUtils.checkCycle(this@Table)) {
+                append(" CASCADE")
             }
         }
         val seqDDL = autoIncColumn?.autoIncSeqName?.let {

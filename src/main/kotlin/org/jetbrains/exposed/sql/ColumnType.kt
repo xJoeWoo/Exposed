@@ -149,6 +149,18 @@ class FloatColumnType: ColumnType() {
     }
 }
 
+class DoubleColumnType: ColumnType() {
+    override fun sqlType(): String  = currentDialect.dataTypeProvider.doubleType()
+
+    override fun valueFromDB(value: Any): Any {
+        val valueFromDB = super.valueFromDB(value)
+        return when (valueFromDB) {
+            is Number -> valueFromDB.toDouble()
+            else -> valueFromDB
+        }
+    }
+}
+
 
 class DecimalColumnType(val precision: Int, val scale: Int): ColumnType() {
     override fun sqlType(): String  = "DECIMAL($precision, $scale)"
@@ -210,11 +222,10 @@ abstract class StringColumnType(val collate: String? = null) : ColumnType() {
         append('\'')
     }
 
-    override fun valueFromDB(value: Any): Any {
-        if (value is java.sql.Clob) {
-            return value.characterStream.readText()
-        }
-        return value
+    override fun valueFromDB(value: Any) = when(value) {
+        is java.sql.Clob -> value.characterStream.readText()
+        is ByteArray -> String(value)
+        else -> value
     }
 }
 

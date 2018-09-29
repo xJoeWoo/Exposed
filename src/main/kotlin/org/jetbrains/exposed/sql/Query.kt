@@ -9,14 +9,19 @@ import java.sql.PreparedStatement
 import java.sql.ResultSet
 import java.util.*
 
-class ResultRow(size: Int, private val fieldIndex: Map<Expression<*>, Int>) {
-    val data = arrayOfNulls<Any?>(size)
+class ResultRow(private val fieldIndex: Map<Expression<*>, Int>) {
+    val data = arrayOfNulls<Any?>(fieldIndex.size)
 
     /**
-     * Function might returns null. Use @tryGet if you don't sure of nullability (e.g. in left-join cases)
+     * Retrieves value of a given expression on this row.
+     *
+     * @param c expression to evaluate
+     * @throws IllegalStateException if expression is not in record set or if result value is uninitialized
+     *
+     * @see [tryGet] to get null in the cases an exception would be thrown
      */
     @Suppress("UNCHECKED_CAST")
-    operator fun <T> get(c: Expression<T>) : T {
+    operator fun <T> get(c: Expression<T>): T {
         val d = getRaw(c)
         return when {
             d == null && c is Column<*> && c.dbDefaultValue != null && !c.columnType.nullable -> {
@@ -37,7 +42,7 @@ class ResultRow(size: Int, private val fieldIndex: Map<Expression<*>, Int>) {
         data[index] = value
     }
 
-    fun<T> hasValue (c: Expression<T>) : Boolean = fieldIndex[c]?.let{ data[it] != NotInitializedValue } ?: false
+    fun <T> hasValue(c: Expression<T>): Boolean = fieldIndex[c]?.let{ data[it] != NotInitializedValue } ?: false
 
     fun <T> tryGet(c: Expression<T>): T? = if (hasValue(c)) get(c) else null
 
@@ -51,18 +56,20 @@ class ResultRow(size: Int, private val fieldIndex: Map<Expression<*>, Int>) {
     internal object NotInitializedValue
 
     companion object {
-        fun create(rs: ResultSet, fields: List<Expression<*>>, fieldsIndex: Map<Expression<*>, Int>) : ResultRow {
-            val size = fieldsIndex.size
-            val answer = ResultRow(size, fieldsIndex)
-
-            fields.forEachIndexed { i, f ->
-                answer.data[i] = (f as? Column<*>)?.columnType?.readObject(rs, i + 1) ?: rs.getObject(i + 1)
+        fun create(rs: ResultSet, fields: List<Expression<*>>): ResultRow {
+            val fieldsIndex = fields.distinct().mapIndexed { i, field ->
+                val value = (field as? Column<*>)?.columnType?.readObject(rs, i + 1) ?: rs.getObject(i + 1)
+                (field to i) to value
+            }.toMap()
+            return ResultRow(fieldsIndex.keys.toMap()).apply {
+                fieldsIndex.forEach{ i, f ->
+                    data[i.second] = f
+                }
             }
-            return answer
         }
 
         internal fun create(columns : List<Column<*>>): ResultRow =
-            ResultRow(columns.size, columns.mapIndexed { i, c -> c to i }.toMap()).apply {
+            ResultRow(columns.mapIndexed { i, c -> c to i }.toMap()).apply {
                 columns.forEach {
                     this[it] = it.defaultValueFun?.invoke() ?: if (!it.columnType.nullable) NotInitializedValue else null
                 }
@@ -247,19 +254,12 @@ open class Query(set: FieldSet, where: Op<Boolean>?): SizedIterable<ResultRow>, 
 
     private inner class ResultIterator(val rs: ResultSet): Iterator<ResultRow> {
         private var hasNext: Boolean? = null
-        private val fieldsIndex = HashMap<Expression<*>, Int>()
-
-        init {
-            set.fields.forEachIndexed { idx, field ->
-                fieldsIndex[field] = idx
-            }
-        }
 
         override operator fun next(): ResultRow {
             if (hasNext == null) hasNext()
             if (hasNext == false) throw NoSuchElementException()
             hasNext = null
-            return ResultRow.create(rs, set.fields, fieldsIndex)
+            return ResultRow.create(rs, set.fields)
         }
 
         override fun hasNext(): Boolean {
@@ -333,4 +333,10 @@ open class Query(set: FieldSet, where: Op<Boolean>?): SizedIterable<ResultRow>, 
             limit = oldLimit
         }
     }
+}
+
+fun Query.andWhere(andPart: SqlExpressionBuilder.() -> Op<Boolean>) = adjustWhere {
+    val expr = Op.build { andPart() }
+    if(this == null) expr
+    else this and expr
 }

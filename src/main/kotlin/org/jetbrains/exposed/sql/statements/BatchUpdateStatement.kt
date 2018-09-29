@@ -11,18 +11,28 @@ import org.jetbrains.exposed.sql.Transaction
 import java.sql.PreparedStatement
 import java.util.*
 
-class BatchUpdateStatement(val table: IdTable<*>): UpdateStatement(table, null) {
-    val data = ArrayList<Pair<EntityID<*>, SortedMap<Column<*>, Any?>>>()
+open class BatchUpdateStatement(val table: IdTable<*>): UpdateStatement(table, null) {
+    val data = ArrayList<Pair<EntityID<*>, Map<Column<*>, Any?>>>()
 
     override val firstDataSet: List<Pair<Column<*>, Any?>> get() = data.first().second.toList()
 
     fun addBatch(id: EntityID<*>) {
-        if (data.size < 2 || data.first().second.keys.toList() == data.last().second.keys.toList()) {
-            data.add(id to TreeMap())
-        } else {
-            val different = data.first().second.keys.intersect(data.last().second.keys)
-            error("Some values missing for batch update. Different columns: $different")
+        val lastBatch = data.lastOrNull()
+        val different by lazy {
+            val set1 = firstDataSet.map { it.first }.toSet()
+            val set2 = lastBatch!!.second.keys
+            (set1 - set2) + (set2 - set1)
         }
+
+        if (data.size > 1 && different.isNotEmpty()) {
+            throw BatchDataInconsistentException("Some values missing for batch update. Different columns: $different")
+        }
+
+        if (data.isNotEmpty()) {
+            data[data.size - 1] = lastBatch!!.copy(second = values.toMap())
+            values.clear()
+        }
+        data.add(id to values)
     }
 
     override fun <T, S:T?> update(column: Column<T>, value: Expression<S>) = error("Expressions unsupported in batch update")
@@ -32,8 +42,9 @@ class BatchUpdateStatement(val table: IdTable<*>): UpdateStatement(table, null) 
 
     override fun PreparedStatement.executeInternal(transaction: Transaction): Int = if (data.size == 1) executeUpdate() else executeBatch().sum()
 
-    override fun arguments(): Iterable<Iterable<Pair<IColumnType, Any?>>>
-            = data.map { it.second.map { it.key.columnType to it.value } + (table.id.columnType to it.first) }
+    override fun arguments(): Iterable<Iterable<Pair<IColumnType, Any?>>> = data.map { (id, row) ->
+        firstDataSet.map { it.first.columnType to row[it.first] } + (table.id.columnType to id)
+    }
 }
 
 class EntityBatchUpdate(val klass: EntityClass<*, Entity<*>>) {

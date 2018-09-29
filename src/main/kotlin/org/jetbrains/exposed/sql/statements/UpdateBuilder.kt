@@ -22,7 +22,7 @@ abstract class UpdateBuilder<out T>(type: StatementType, targets: List<Table>): 
         }
         val colLength = (column.columnType as? VarCharColumnType)?.colLength
         if (value is String && colLength != null && value.length > colLength) {
-            error("Value '$value' can't be stored to database column because exceeds length $column.columnType.colLength")
+            error("Value '$value' can't be stored to database column because exceeds length $colLength")
         }
         values[column] = value
     }

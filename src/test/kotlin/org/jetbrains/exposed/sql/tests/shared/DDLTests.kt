@@ -432,7 +432,7 @@ class DDLTests : DatabaseTestsBase() {
             }
         }
 
-        withTables(excludeSettings = listOf(TestDB.H2, TestDB.H2_MYSQL, TestDB.SQLITE), tables = initialTable) {
+        withTables(excludeSettings = listOf(TestDB.H2, TestDB.H2_MYSQL, TestDB.SQLITE), tables = *arrayOf(initialTable)) {
             assertEquals("ALTER TABLE ${tableName.inProperCase()} ADD ${"id".inProperCase()} ${t.id.columnType.sqlType()} PRIMARY KEY", t.id.ddl)
             assertEquals(1, currentDialect.tableColumns(t)[t]!!.size)
             SchemaUtils.createMissingTablesAndColumns(t)
@@ -485,6 +485,39 @@ class DDLTests : DatabaseTestsBase() {
             }
 
             assertEquals(2, UserToRepo.selectAll().count())
+        }
+    }
+
+    object Table1 : IntIdTable() {
+        val table2 = reference("teamId", Table2, onDelete = ReferenceOption.NO_ACTION)
+    }
+
+    object Table2 : IntIdTable() {
+        val table1 = optReference("teamId", Table1, onDelete = ReferenceOption.NO_ACTION)
+    }
+
+    @Test fun testCrossReference() {
+        withTables(Table2, Table1) {
+            val table2id = Table2.insertAndGetId{}
+            val table1id = Table1.insertAndGetId {
+                it[Table1.table2] = table2id
+            }
+
+            Table2.insertAndGetId {
+                it[Table2.table1] = table1id
+            }
+
+            assertEquals(1, Table1.selectAll().count())
+            assertEquals(2, Table2.selectAll().count())
+            if (currentDialect is MysqlDialect) {
+               exec("SET foreign_key_checks = 0;")
+            }
+            if (currentDialect is PostgreSQLDialect) {
+                exec("set constraints all deferred;")
+            }
+            if (currentDialect is SQLServerDialect) {
+                exec("DROP TABLE ${identity(Table1)}, ${identity(Table2)} CASCADE;")
+            }
         }
     }
 
@@ -598,7 +631,7 @@ class DDLTests : DatabaseTestsBase() {
     }
 
     object EnumTable : IntIdTable("EnumTable") {
-        internal var enumColumn: Column<Foo> = enumeration("enumColumn", Foo::class.java)
+        internal var enumColumn: Column<Foo> = enumeration("enumColumn", Foo::class)
 
         internal fun initEnumColumn(sql: String) {
             (columns as MutableList<Column<*>>).remove(enumColumn)
@@ -652,6 +685,22 @@ class DDLTests : DatabaseTestsBase() {
                     SchemaUtils.drop(EnumTable)
                 } catch (ignore: Exception) {}
             }
+        }
+    }
+
+    // https://github.com/JetBrains/Exposed/issues/112
+    @Test fun testDropTableFlushesCache() {
+        withDb {
+            class Keyword(id: EntityID<Int>) : IntEntity(id) {
+                var bool by KeyWordTable.bool
+            }
+            val KeywordEntityClass = object : IntEntityClass<Keyword>(KeyWordTable, Keyword::class.java) {}
+
+            SchemaUtils.create(KeyWordTable)
+
+            val newKeyword = KeywordEntityClass.new { bool = true }
+
+            SchemaUtils.drop(KeyWordTable)
         }
     }
 }

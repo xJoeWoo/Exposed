@@ -3,8 +3,7 @@ package org.jetbrains.exposed.sql.tests.shared
 import demo.dao.User
 import org.hamcrest.Matchers.containsInAnyOrder
 import org.hamcrest.Matchers.not
-import org.jetbrains.exposed.dao.IdTable
-import org.jetbrains.exposed.dao.IntIdTable
+import org.jetbrains.exposed.dao.*
 import org.jetbrains.exposed.exceptions.UnsupportedByDialectException
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.Function
@@ -17,6 +16,7 @@ import org.jetbrains.exposed.sql.vendors.OracleDialect
 import org.jetbrains.exposed.sql.vendors.PostgreSQLDialect
 import org.jetbrains.exposed.sql.vendors.SQLServerDialect
 import org.jetbrains.exposed.sql.vendors.currentDialect
+import org.joda.time.DateTime
 import org.junit.Assert.assertThat
 import org.junit.Test
 import java.math.BigDecimal
@@ -57,11 +57,11 @@ object DMLTestsData {
         val t = datetime<Date>("t")
         val tn = datetime<Date>("tn").nullable()
 
-        val e = enumeration("e", E::class.java)
-        val en = enumeration("en", E::class.java).nullable()
+        val e = enumeration("e", E::class)
+        val en = enumeration("en", E::class).nullable()
 
-        val es = enumerationByName("es", 5, E::class.java)
-        val esn = enumerationByName("esn", 5, E::class.java).nullable()
+        val es = enumerationByName("es", 5, E::class)
+        val esn = enumerationByName("esn", 5, E::class).nullable()
 
         val s = varchar("s", 100)
         val sn = varchar("sn", 100).nullable()
@@ -70,6 +70,7 @@ object DMLTestsData {
         val dcn = decimal("dcn", 12, 2).nullable()
 
         val fcn = float("fcn").nullable()
+        val dblcn = double("dblcn").nullable()
 
         val char = char("char").nullable()
     }
@@ -437,10 +438,12 @@ class DMLTests : DatabaseTestsBase() {
     @Test
     fun testGroupBy01() {
         withCitiesAndUsers { cities, users, userData ->
-            ((cities innerJoin users).slice(cities.name, users.id.count()).selectAll().groupBy(cities.name)).forEach {
+            val cAlias = users.id.count().alias("c")
+            ((cities innerJoin users).slice(cities.name, users.id.count(), cAlias).selectAll().groupBy(cities.name)).forEach {
                 val cityName = it[cities.name]
                 val userCount = it[users.id.count()]
-
+                val userCountAlias = it[cAlias]
+                assertTrue(userCountAlias is Int)
                 when (cityName) {
                     "Munich" -> assertEquals(2, userCount)
                     "Prague" -> assertEquals(0, userCount)
@@ -448,6 +451,43 @@ class DMLTests : DatabaseTestsBase() {
                     else -> error("Unknow city $cityName")
                 }
             }
+        }
+    }
+
+    @Test
+    fun `test_github_issue_379_count_alias_ClassCastException`() {
+        val Stables = object : UUIDTable("Stables") {
+            val name = varchar("name", 256).uniqueIndex()
+        }
+
+        val Facilities = object : UUIDTable("Facilities") {
+            val stableId = reference("stable_id", Stables)
+            val name = varchar("name", 256)
+        }
+
+        withTables(Facilities, Stables) {
+            val stable1Id = Stables.insertAndGetId {
+                it[Stables.name] = "Stables1"
+            }
+            Stables.insertAndGetId {
+                it[Stables.name] = "Stables2"
+            }
+            Facilities.insertAndGetId {
+                it[Facilities.stableId] = stable1Id
+                it[Facilities.name] = "Facility1"
+            }
+            val fcAlias = Facilities.name.count().alias("fc")
+            val fAlias = Facilities.slice(Facilities.stableId, fcAlias).selectAll().groupBy(Facilities.stableId).alias("f")
+            val sliceColumns = Stables.columns + fAlias[fcAlias]
+            val stats = Stables.join(fAlias, JoinType.LEFT, Stables.id, fAlias[Facilities.stableId])
+                    .slice(sliceColumns)
+                    .selectAll()
+                    .groupBy(*sliceColumns.toTypedArray()).map {
+                        it[Stables.name] to it[fAlias[fcAlias]]
+                    }.toMap()
+            assertEquals(2, stats.size)
+            assertEquals(1, stats["Stables1"])
+            assertNull(stats["Stables2"])
         }
     }
 
@@ -754,13 +794,19 @@ class DMLTests : DatabaseTestsBase() {
     fun testCalc03() {
         withCitiesAndUsers { cities, users, userData ->
             val sum = Expression.build { Sum(cities.id * 100 + userData.value / 10, IntegerColumnType()) }
-            val r = (users innerJoin userData innerJoin cities).slice(users.id, sum)
+            val mod1 = Expression.build { sum % 100 }
+            val mod2 = Expression.build { sum mod 100 }
+            val r = (users innerJoin userData innerJoin cities).slice(users.id, sum, mod1, mod1)
                 .selectAll().groupBy(users.id).orderBy(users.id).toList()
             assertEquals(2, r.size)
             assertEquals("eugene", r[0][users.id])
             assertEquals(202, r[0][sum])
+            assertEquals(2, r[0][mod1])
+            assertEquals(2, r[0][mod2])
             assertEquals("sergey", r[1][users.id])
             assertEquals(203, r[1][sum])
+            assertEquals(3, r[1][mod1])
+            assertEquals(3, r[1][mod2])
         }
     }
 
@@ -853,7 +899,10 @@ class DMLTests : DatabaseTestsBase() {
         }
     }
 
-    private fun DMLTestsData.Misc.checkRow(row: ResultRow, n: Int, nn: Int?, d: Date, dn: Date?, t: Date, tn: Date?, e: DMLTestsData.E, en: DMLTestsData.E?, es: DMLTestsData.E, esn: DMLTestsData.E?, s: String, sn: String?, dc: BigDecimal, dcn: BigDecimal?, fcn: Float?) {
+    private fun DMLTestsData.Misc.checkRow(row: ResultRow, n: Int, nn: Int?, d: DateTime, dn: DateTime?,
+                                           t: DateTime, tn: DateTime?, e: DMLTestsData.E, en: DMLTestsData.E?,
+                                           es: DMLTestsData.E, esn: DMLTestsData.E?, s: String, sn: String?,
+                                           dc: BigDecimal, dcn: BigDecimal?, fcn: Float?, dblcn: Double?) {
         assertEquals(row[this.n], n)
         assertEquals(row[this.nn], nn)
         assertEqualDateTime(row[this.d], d)
@@ -869,6 +918,7 @@ class DMLTests : DatabaseTestsBase() {
         assertEquals(row[this.dc], dc)
         assertEquals(row[this.dcn], dcn)
         assertEquals(row[this.fcn], fcn)
+        assertEquals(row[this.dblcn], dblcn)
     }
 
     @Test
@@ -890,7 +940,8 @@ class DMLTests : DatabaseTestsBase() {
             }
 
             val row = tbl.selectAll().single()
-            tbl.checkRow(row, 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, "test", null, BigDecimal("239.42"), null, null)
+            tbl.checkRow(row, 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE,
+                    null, "test", null, BigDecimal("239.42"), null, null, null)
             assertEquals('(', row[tbl.char])
         }
     }
@@ -921,7 +972,8 @@ class DMLTests : DatabaseTestsBase() {
             }
 
             val row = tbl.selectAll().single()
-            tbl.checkRow(row, 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, "test", null, BigDecimal("239.42"), null, null)
+            tbl.checkRow(row, 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE,
+                    null, "test", null, BigDecimal("239.42"), null, null, null)
         }
     }
 
@@ -948,10 +1000,12 @@ class DMLTests : DatabaseTestsBase() {
                 it[dc] = BigDecimal("239.42")
                 it[dcn] = BigDecimal("239.42")
                 it[fcn] = 239.42f
+                it[dblcn] = 567.89
             }
 
             val row = tbl.selectAll().single()
-            tbl.checkRow(row, 42, 42, date, date, time, time, DMLTestsData.E.ONE, DMLTestsData.E.ONE, DMLTestsData.E.ONE, DMLTestsData.E.ONE, "test", "test", BigDecimal("239.42"), BigDecimal("239.42"), 239.42f)
+            tbl.checkRow(row, 42, 42, date, date, time, time, DMLTestsData.E.ONE, DMLTestsData.E.ONE, DMLTestsData.E.ONE, DMLTestsData.E.ONE,
+                    "test", "test", BigDecimal("239.42"), BigDecimal("239.42"), 239.42f, 567.89)
         }
     }
 
@@ -973,7 +1027,8 @@ class DMLTests : DatabaseTestsBase() {
             }
 
             val row = tbl.selectAll().single()
-            tbl.checkRow(row, 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, stringThatNeedsEscaping, null, BigDecimal("239.42"), null, null)
+            tbl.checkRow(row, 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, stringThatNeedsEscaping, null,
+                    BigDecimal("239.42"), null, null, null)
         }
     }
 
@@ -1195,25 +1250,25 @@ class DMLTests : DatabaseTestsBase() {
                 it[dc] = dec
             }
 
-            tbl.checkRow(tbl.select { tbl.n.eq(42) }.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null)
-            tbl.checkRow(tbl.select { tbl.nn.isNull() }.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null)
-            tbl.checkRow(tbl.select { tbl.nn.eq(null as Int?) }.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null)
+            tbl.checkRow(tbl.select { tbl.n.eq(42) }.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null, null)
+            tbl.checkRow(tbl.select { tbl.nn.isNull() }.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null, null)
+            tbl.checkRow(tbl.select { tbl.nn.eq(null as Int?) }.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null, null)
 
-            tbl.checkRow(tbl.select{tbl.d.eq(date)}.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null)
-            tbl.checkRow(tbl.select{tbl.dn.isNull()}.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null)
-            tbl.checkRow(tbl.select{tbl.dn.eq(null as Date?)}.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null)
+            tbl.checkRow(tbl.select { tbl.d.eq(date) }.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null, null)
+            tbl.checkRow(tbl.select { tbl.dn.isNull() }.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null, null)
+            tbl.checkRow(tbl.select { tbl.dn.eq(null as DateTime?) }.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null, null)
 
-            tbl.checkRow(tbl.select{tbl.t.eq(time)}.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null)
-            tbl.checkRow(tbl.select{tbl.tn.isNull()}.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null)
-            tbl.checkRow(tbl.select{tbl.tn.eq(null as Date?)}.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null)
+            tbl.checkRow(tbl.select { tbl.t.eq(time) }.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null, null)
+            tbl.checkRow(tbl.select { tbl.tn.isNull() }.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null, null)
+            tbl.checkRow(tbl.select { tbl.tn.eq(null as DateTime?) }.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null, null)
 
-            tbl.checkRow(tbl.select { tbl.e.eq(DMLTestsData.E.ONE) }.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null)
-            tbl.checkRow(tbl.select { tbl.en.isNull() }.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null)
-            tbl.checkRow(tbl.select { tbl.en.eq(null as DMLTestsData.E?) }.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null)
+            tbl.checkRow(tbl.select { tbl.e.eq(DMLTestsData.E.ONE) }.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null, null)
+            tbl.checkRow(tbl.select { tbl.en.isNull() }.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null, null)
+            tbl.checkRow(tbl.select { tbl.en.eq(null as DMLTestsData.E?) }.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null, null)
 
-            tbl.checkRow(tbl.select { tbl.s.eq(sTest) }.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null)
-            tbl.checkRow(tbl.select { tbl.sn.isNull() }.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null)
-            tbl.checkRow(tbl.select { tbl.sn.eq(null as String?) }.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null)
+            tbl.checkRow(tbl.select { tbl.s.eq(sTest) }.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null, null)
+            tbl.checkRow(tbl.select { tbl.sn.isNull() }.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null, null)
+            tbl.checkRow(tbl.select { tbl.sn.eq(null as String?) }.single(), 42, null, date, null, time, null, DMLTestsData.E.ONE, null, DMLTestsData.E.ONE, null, sTest, null, dec, null, null, null)
         }
     }
 
@@ -1242,22 +1297,23 @@ class DMLTests : DatabaseTestsBase() {
                 it[dc] = dec
                 it[dcn] = dec
                 it[fcn] = 239.42f
+                it[dblcn] = 567.89
             }
 
-            tbl.checkRow(tbl.select { tbl.nn.eq(42) }.single(), 42, 42, date, date, time, time, eOne, eOne, eOne, eOne, sTest, sTest, dec, dec, 239.42f)
-            tbl.checkRow(tbl.select { tbl.nn.neq<Int?>(null) }.single(), 42, 42, date, date, time, time, eOne, eOne, eOne, eOne, sTest, sTest, dec, dec, 239.42f)
+            tbl.checkRow(tbl.select { tbl.nn.eq(42) }.single(), 42, 42, date, date, time, time, eOne, eOne, eOne, eOne, sTest, sTest, dec, dec, 239.42f, 567.89)
+            tbl.checkRow(tbl.select { tbl.nn.neq<Int?>(null) }.single(), 42, 42, date, date, time, time, eOne, eOne, eOne, eOne, sTest, sTest, dec, dec, 239.42f, 567.89)
 
-            tbl.checkRow(tbl.select { tbl.dn.eq(date) }.single(), 42, 42, date, date, time, time, eOne, eOne, eOne, eOne, sTest, sTest, dec, dec, 239.42f)
-            tbl.checkRow(tbl.select { tbl.dn.isNotNull() }.single(), 42, 42, date, date, time, time, eOne, eOne, eOne, eOne, sTest, sTest, dec, dec, 239.42f)
+            tbl.checkRow(tbl.select { tbl.dn.eq(date) }.single(), 42, 42, date, date, time, time, eOne, eOne, eOne, eOne, sTest, sTest, dec, dec, 239.42f, 567.89)
+            tbl.checkRow(tbl.select { tbl.dn.isNotNull() }.single(), 42, 42, date, date, time, time, eOne, eOne, eOne, eOne, sTest, sTest, dec, dec, 239.42f, 567.89)
 
-            tbl.checkRow(tbl.select { tbl.t.eq(time) }.single(), 42, 42, date, date, time, time, eOne, eOne, eOne, eOne, sTest, sTest, dec, dec, 239.42f)
-            tbl.checkRow(tbl.select { tbl.tn.isNotNull() }.single(), 42, 42, date, date, time, time, eOne, eOne, eOne, eOne, sTest, sTest, dec, dec, 239.42f)
+            tbl.checkRow(tbl.select { tbl.t.eq(time) }.single(), 42, 42, date, date, time, time, eOne, eOne, eOne, eOne, sTest, sTest, dec, dec, 239.42f, 567.89)
+            tbl.checkRow(tbl.select { tbl.tn.isNotNull() }.single(), 42, 42, date, date, time, time, eOne, eOne, eOne, eOne, sTest, sTest, dec, dec, 239.42f, 567.89)
 
-            tbl.checkRow(tbl.select { tbl.en.eq(eOne) }.single(), 42, 42, date, date, time, time, eOne, eOne, eOne, eOne, sTest, sTest, dec, dec, 239.42f)
-            tbl.checkRow(tbl.select { tbl.en.isNotNull() }.single(), 42, 42, date, date, time, time, eOne, eOne, eOne, eOne, sTest, sTest, dec, dec, 239.42f)
+            tbl.checkRow(tbl.select { tbl.en.eq(eOne) }.single(), 42, 42, date, date, time, time, eOne, eOne, eOne, eOne, sTest, sTest, dec, dec, 239.42f, 567.89)
+            tbl.checkRow(tbl.select { tbl.en.isNotNull() }.single(), 42, 42, date, date, time, time, eOne, eOne, eOne, eOne, sTest, sTest, dec, dec, 239.42f, 567.89)
 
-            tbl.checkRow(tbl.select { tbl.sn.eq(sTest) }.single(), 42, 42, date, date, time, time, eOne, eOne, eOne, eOne, sTest, sTest, dec, dec, 239.42f)
-            tbl.checkRow(tbl.select { tbl.sn.isNotNull() }.single(), 42, 42, date, date, time, time, eOne, eOne, eOne, eOne, sTest, sTest, dec, dec, 239.42f)
+            tbl.checkRow(tbl.select { tbl.sn.eq(sTest) }.single(), 42, 42, date, date, time, time, eOne, eOne, eOne, eOne, sTest, sTest, dec, dec, 239.42f, 567.89)
+            tbl.checkRow(tbl.select { tbl.sn.isNotNull() }.single(), 42, 42, date, date, time, time, eOne, eOne, eOne, eOne, sTest, sTest, dec, dec, 239.42f, 567.89)
         }
     }
 
@@ -1300,7 +1356,7 @@ class DMLTests : DatabaseTestsBase() {
             }
 
             val row = tbl.selectAll().single()
-            tbl.checkRow(row, 42, null, date, null, time, null, eOne, null, eOne, null, sTest, null, dec, null, null)
+            tbl.checkRow(row, 42, null, date, null, time, null, eOne, null, eOne, null, sTest, null, dec, null, null, null)
         }
     }
 
@@ -1329,7 +1385,7 @@ class DMLTests : DatabaseTestsBase() {
             }
 
             val row = tbl.select { tbl.n eq 101 }.single()
-            tbl.checkRow(row, 101, null, date, null, time, null, eOne, null, eOne, null, "23456789", "3456789", dec, null, null)
+            tbl.checkRow(row, 101, null, date, null, time, null, eOne, null, eOne, null, "23456789", "3456789", dec, null, null, null)
         }
     }
 
@@ -1346,6 +1402,14 @@ class DMLTests : DatabaseTestsBase() {
             cities.select {
                 intLiteral(1) eq intLiteral(1)
             }
+        }
+    }
+
+    @Test
+    fun testJoinWithJoin01() {
+        withCitiesAndUsers { cities, users, userData ->
+            val rows = (cities innerJoin (users innerJoin userData)).selectAll()
+            assertEquals(2, rows.count())
         }
     }
 
@@ -1488,7 +1552,7 @@ class DMLTests : DatabaseTestsBase() {
         }
     }
 
-    private fun assertQueryResultValid(query: Query): Unit {
+    private fun assertQueryResultValid(query: Query) {
         val users = DMLTestsData.Users
         val cities = DMLTestsData.Cities
         query.forEach { row ->
@@ -1565,6 +1629,24 @@ class DMLTests : DatabaseTestsBase() {
     }
 
     @Test
+    fun testQueryAndWhere() {
+        withCitiesAndUsers { cities, users, _ ->
+            val queryAdjusted = (users innerJoin cities)
+                    .slice(users.name, cities.name)
+                    .select{ predicate }
+
+            queryAdjusted.andWhere {
+                predicate
+            }
+            val actualWhere = queryAdjusted.where
+            fun Op<Boolean>.repr(): String = this.toSQL(QueryBuilder(false))
+
+            assertEquals((predicate.and(predicate)).repr(), actualWhere!!.repr())
+            assertQueryResultValid(queryAdjusted)
+        }
+    }
+
+    @Test
     fun `test that count() works with Query that contains distinct and columns with same name from different tables`() {
         withCitiesAndUsers { cities, users, _ ->
             assertEquals(3, cities.innerJoin(users).selectAll().withDistinct().count())
@@ -1585,10 +1667,44 @@ class DMLTests : DatabaseTestsBase() {
             val sameQueryWithGrouping = userData.slice(userData.value.max()).selectAll().groupBy(userData.user_id).count()
             assertEquals(uniqueUsersInData, sameQueryWithGrouping)
         }
+
+        withTables(OrgMemberships, Orgs) {
+            val org1 = Org.new {
+                name = "FOo"
+            }
+            val membership = OrgMembership.new {
+                org = org1
+            }
+
+            assertEquals(1, OrgMemberships.selectAll().count())
+        }
     }
 }
 
 private val today: Date get() {
     val d = Date()
     return Date(d.year, d.month, d.day)
+}
+
+object OrgMemberships : IntIdTable() {
+    val orgId = reference("org", Orgs.uid)
+}
+
+class OrgMembership(id: EntityID<Int>) : IntEntity(id) {
+    companion object : IntEntityClass<OrgMembership>(OrgMemberships)
+
+    val orgId by OrgMemberships.orgId
+    var org by Org referencedOn OrgMemberships.orgId
+}
+
+object Orgs : IntIdTable() {
+    val uid = varchar("uid", 36).uniqueIndex().clientDefault { UUID.randomUUID().toString() }
+    val name = varchar("name", 256)
+}
+
+class Org(id: EntityID<Int>) : IntEntity(id) {
+    companion object : IntEntityClass<Org>(Orgs)
+
+    var uid by Orgs.uid
+    var name by Orgs.name
 }
